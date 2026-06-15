@@ -184,8 +184,8 @@ pip install -e .
 ### 2. Configure Environment
 Create `.env`:
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:postgrespassword@localhost:5432/stockguard
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+DATABASE_URL=postgresql+psycopg://<db_user>:<db_password>@localhost:5432/stockguard
+RABBITMQ_URL=amqp://<rabbitmq_user>:<rabbitmq_password>@localhost:5672/
 RABBITMQ_ENABLED=true
 ENVIRONMENT=development
 ```

@@ -22,8 +22,8 @@ pip install -e .
 ### Environment Configuration
 Copy `.env.example` to `.env` and verify database connection details:
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:postgrespassword@localhost:5432/stockguard
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+DATABASE_URL=postgresql+psycopg://<db_user>:<db_password>@localhost:5432/stockguard
+RABBITMQ_URL=amqp://<rabbitmq_user>:<rabbitmq_password>@localhost:5672/
 ENVIRONMENT=development
 ```
 
