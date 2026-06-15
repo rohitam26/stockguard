@@ -1,7 +1,7 @@
 import sys
 import os
 import pytest
-from starlette.testclient import TestClient
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 # Ensure src is on sys.path

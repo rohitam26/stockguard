@@ -87,7 +87,7 @@ class InventoryService:
     def list_products(
         db: Session,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 500,
         active_only: bool = True
     ) -> list[Product]:
         query = select(Product)
@@ -130,9 +130,9 @@ class InventoryService:
     def list_inventory(
         db: Session,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 500
     ) -> list[InventoryItem]:
-        query = select(InventoryItem).offset(skip).limit(limit)
+        query = select(InventoryItem).offset(skip).limit(limit).order_by(InventoryItem.created_at.desc())
         return list(db.execute(query).scalars().all())
 
     @staticmethod

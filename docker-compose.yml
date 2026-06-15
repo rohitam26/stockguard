@@ -18,6 +18,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - stockguard-net
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -29,11 +31,31 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_running"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - stockguard-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: stockguard-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - stockguard-net
 
   api:
     build:
@@ -46,13 +68,29 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/stockguard
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       RABBITMQ_ENABLED: "true"
+      REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: production
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - stockguard-net
 
 volumes:
   pgdata:
+  rabbitmq_data:
+  redis_data:
+
+networks:
+  stockguard-net:
+    driver: bridge

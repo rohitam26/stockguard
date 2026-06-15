@@ -36,7 +36,7 @@ def run_api_verification():
             print(f"[FAIL] {method} {url} -> ERROR: {e}")
             return None
 
-    print("=== VERIFYING ALL 22 API ENDPOINTS ===")
+    print("=== VERIFYING ALL 25 API ENDPOINT CHECKS ===")
 
     # 1. Health
     check("Health Check", "GET", "/api/v1/health", 200)
