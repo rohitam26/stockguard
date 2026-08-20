@@ -1,0 +1,1 @@
+# StockGuard Independent Microservices Package
