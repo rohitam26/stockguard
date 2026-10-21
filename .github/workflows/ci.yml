@@ -1,0 +1,77 @@
+name: StockGuard CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Build, Lint & Automated Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: stockguard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics check_running"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install pip-audit flake8
+
+      - name: Lint with Flake8
+        run: |
+          flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Dependency Security Audit
+        run: |
+          python -m pip_audit -r requirements.txt
+
+      - name: Run Alembic Migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@localhost:5432/stockguard
+        run: |
+          python -m alembic upgrade head
+
+      - name: Run Pytest Suite & Concurrency Test
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@localhost:5432/stockguard
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+          RABBITMQ_ENABLED: "true"
+        run: |
+          python -m pytest -v -s
