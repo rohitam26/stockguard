@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockGuard - Distributed Inventory & Saga Engine</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h2>StockGuard</h2>
+          <span class="badge-env" id="envBadge">Development</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="tab-overview">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Overview & Metrics
+        </button>
+        <button class="nav-item" data-tab="tab-inventory">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          Inventory & Products
+        </button>
+        <button class="nav-item" data-tab="tab-reservations">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Atomic Reservations
+        </button>
+        <button class="nav-item" data-tab="tab-orders">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          Order & Saga Orchestrator
+        </button>
+        <button class="nav-item" data-tab="tab-events">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Transactional Outbox
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status">
+          <div class="status-indicator">
+            <span class="status-dot healthy" id="dbStatusDot"></span>
+            <span id="dbStatusText">Checking DB...</span>
+          </div>
+          <div class="status-indicator">
+            <span class="status-dot healthy" id="mqStatusDot"></span>
+            <span id="mqStatusText">Checking Broker...</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <h1 id="pageTitle">Enterprise Inventory & Saga Engine</h1>
+          <p class="subtitle">Guaranteed high-concurrency consistency, transactional outbox & distributed saga orchestrator</p>
+        </div>
+        <div class="header-right">
+          <button class="btn btn-secondary btn-sm" id="btnRefreshAll" title="Refresh all data">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/></svg>
+            Refresh
+          </button>
+          <a href="/docs" target="_blank" class="btn btn-primary btn-sm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Swagger API
+          </a>
+        </div>
+      </header>
+
+      <!-- KPI Summary Cards -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Total SKUs</span>
+            <div class="kpi-icon blue">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiTotalSkus">0</div>
+          <div class="kpi-sub">Active catalog products</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Available Units</span>
+            <div class="kpi-icon green">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiAvailableStock">0</div>
+          <div class="kpi-sub" id="kpiLowStockWarning">0 SKUs low in stock</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Active Reservations</span>
+            <div class="kpi-icon amber">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiActiveReservations">0</div>
+          <div class="kpi-sub">Atomic locks held</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Total Orders</span>
+            <div class="kpi-icon purple">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiTotalOrders">0</div>
+          <div class="kpi-sub" id="kpiTotalRevenue">$0.00 revenue</div>
+        </div>
+      </section>
+
+      <!-- TAB 1: OVERVIEW -->
+      <section class="tab-pane active" id="tab-overview">
+        <div class="content-row">
+          <div class="card flex-2">
+            <div class="card-header">
+              <h3>Live Inventory Breakdown</h3>
+              <div class="table-actions">
+                <input type="text" id="inventorySearch" placeholder="Filter by SKU or Name..." class="input-search">
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="tableOverviewInventory">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th>Price</th>
+                    <th>Available</th>
+                    <th>Reserved</th>
+                    <th>Allocated</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="overviewInventoryBody">
+                  <tr><td colspan="8" class="text-center py-4">Loading stock data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>System Architecture Status</h3>
+            </div>
+            <div class="arch-box">
+              <div class="arch-item">
+                <div class="arch-title">
+                  <span class="dot-live"></span> Database Engine
+                </div>
+                <div class="arch-desc" id="archDbDesc">PostgreSQL 16 with Row-Level Locking</div>
+              </div>
+              <div class="arch-item">
+                <div class="arch-title">
+                  <span class="dot-live"></span> Concurrency Guarantee
+                </div>
+                <div class="arch-desc">Conditional UPDATE + CHECK (available_stock &gt;= 0)</div>
+              </div>
+              <div class="arch-item">
+                <div class="arch-title">
+                  <span class="dot-live"></span> Distributed Messaging
+                </div>
+                <div class="arch-desc" id="archMqDesc">Transactional Outbox + RabbitMQ Topic Exchange</div>
+              </div>
+              <div class="arch-item">
+                <div class="arch-title">
+                  <span class="dot-live"></span> Consistency Model
+                </div>
+                <div class="arch-desc">Saga Orchestrator with Compensating Transactions</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: INVENTORY & PRODUCTS -->
+      <section class="tab-pane" id="tab-inventory">
+        <div class="content-row">
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>Create New Product</h3>
+            </div>
+            <form id="formCreateProduct" class="standard-form">
+              <div class="form-group">
+                <label for="pSku">SKU (Stock Keeping Unit)</label>
+                <input type="text" id="pSku" required placeholder="e.g. LAPTOP-PRO-16" pattern="[A-Za-z0-9-_]{2,64}">
+              </div>
+              <div class="form-group">
+                <label for="pName">Product Name</label>
+                <input type="text" id="pName" required placeholder="e.g. UltraBook Pro 16GB">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="pPrice">Price ($)</label>
+                  <input type="number" id="pPrice" required min="0" step="0.01" placeholder="1299.99">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="pStock">Initial Stock</label>
+                  <input type="number" id="pStock" required min="0" step="1" value="50">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="pThreshold">Low Stock Alert Threshold</label>
+                <input type="number" id="pThreshold" required min="0" step="1" value="10">
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Add Product to Catalog</button>
+            </form>
+          </div>
+
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>Adjust Inventory (Restock / Deduct)</h3>
+            </div>
+            <form id="formAdjustStock" class="standard-form">
+              <div class="form-group">
+                <label for="adjSku">Select SKU</label>
+                <select id="adjSku" required>
+                  <option value="">-- Choose SKU --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="adjDelta">Quantity Delta (+ to restock, - to deduct)</label>
+                <input type="number" id="adjDelta" required step="1" placeholder="e.g. +20 or -5">
+              </div>
+              <div class="form-group">
+                <label for="adjReason">Audit Reason</label>
+                <input type="text" id="adjReason" required placeholder="e.g. Factory restock, Damaged goods cycle count">
+              </div>
+              <button type="submit" class="btn btn-secondary btn-block">Apply Stock Adjustment</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: RESERVATIONS -->
+      <section class="tab-pane" id="tab-reservations">
+        <div class="content-row">
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>Create Atomic Stock Reservation</h3>
+            </div>
+            <form id="formCreateReservation" class="standard-form">
+              <div class="form-group">
+                <label for="resSku">Target SKU</label>
+                <select id="resSku" required>
+                  <option value="">-- Choose SKU --</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="resQty">Quantity</label>
+                  <input type="number" id="resQty" required min="1" step="1" value="1">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="resTtl">TTL (Seconds)</label>
+                  <input type="number" id="resTtl" required min="10" step="10" value="600">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="resIdempotency">Client Idempotency Key</label>
+                <div class="input-with-button">
+                  <input type="text" id="resIdempotency" required>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnGenResKey">Generate</button>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Reserve Stock Now</button>
+            </form>
+          </div>
+
+          <div class="card flex-2">
+            <div class="card-header">
+              <h3>Active &amp; Historical Reservations</h3>
+              <button class="btn btn-secondary btn-sm" id="btnExpireStale">
+                Run Auto-Expiry Sweep
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Reservation ID</th>
+                    <th>SKU</th>
+                    <th>Qty</th>
+                    <th>Status</th>
+                    <th>Expires In</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="reservationsTableBody">
+                  <tr><td colspan="6" class="text-center py-4">No active reservations recorded</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: ORDERS & SAGA ORCHESTRATOR -->
+      <section class="tab-pane" id="tab-orders">
+        <div class="content-row">
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>Create Order &amp; Run Saga</h3>
+            </div>
+            <form id="formCreateOrder" class="standard-form">
+              <div class="form-group">
+                <label for="ordCustomer">Customer ID</label>
+                <input type="text" id="ordCustomer" required value="cust-alice-99">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="ordSku">Product SKU</label>
+                  <select id="ordSku" required>
+                    <option value="">-- Choose SKU --</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="ordQty">Quantity</label>
+                  <input type="number" id="ordQty" required min="1" step="1" value="1">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="ordSimulatePaymentFailure">
+                  <span class="checkbox-custom"></span>
+                  Simulate Payment Failure (Verify Saga Compensation)
+                </label>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Submit Order &amp; Execute Saga</button>
+            </form>
+          </div>
+
+          <div class="card flex-2">
+            <div class="card-header">
+              <h3>Saga Execution Visualizer</h3>
+            </div>
+            <div class="saga-visualizer" id="sagaVisualizer">
+              <div class="saga-step" id="stepReservation">
+                <div class="step-circle">1</div>
+                <div class="step-info">
+                  <h4>Inventory Reservation</h4>
+                  <p class="step-desc">Atomic stock deduction</p>
+                  <span class="step-badge badge-idle">Pending</span>
+                </div>
+              </div>
+              <div class="saga-line"></div>
+              <div class="saga-step" id="stepPayment">
+                <div class="step-circle">2</div>
+                <div class="step-info">
+                  <h4>Payment Simulation</h4>
+                  <p class="step-desc">Debit customer account</p>
+                  <span class="step-badge badge-idle">Pending</span>
+                </div>
+              </div>
+              <div class="saga-line"></div>
+              <div class="saga-step" id="stepFulfillment">
+                <div class="step-circle">3</div>
+                <div class="step-info">
+                  <h4>Fulfillment &amp; Ship</h4>
+                  <p class="step-desc">Allocate stock &amp; dispatch</p>
+                  <span class="step-badge badge-idle">Pending</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="saga-log-container">
+              <div class="saga-log-header">Saga Execution Log</div>
+              <pre class="saga-log" id="sagaLog">Ready. Submit an order to visualize real-time distributed saga coordination and compensation.</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-4">
+          <div class="card-header">
+            <h3>Recent Orders</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Order Number</th>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Created At</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ordersTableBody">
+                <tr><td colspan="6" class="text-center py-4">No orders placed yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: TRANSACTIONAL OUTBOX -->
+      <section class="tab-pane" id="tab-events">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>Transactional Outbox Message Log</h3>
+              <p class="card-subtitle">Zero dual-write inconsistency: all domain changes write events in the same DB transaction</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btnFlushOutbox">
+              Dispatch Pending Outbox Messages
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Message ID</th>
+                  <th>Event Type</th>
+                  <th>Aggregate</th>
+                  <th>Status</th>
+                  <th>Retries</th>
+                  <th>Created At</th>
+                  <th>Processed At</th>
+                </tr>
+              </thead>
+              <tbody id="outboxTableBody">
+                <tr><td colspan="7" class="text-center py-4">Loading outbox records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
