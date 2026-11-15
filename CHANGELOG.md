@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dynamic Connection State Machine:** Visual pulse indicators across `Connected`, `Reconnecting...`, `Backend Disconnected` (after $\ge 2$ failures), and `Sync Paused`.
 - **Automated Playwright Real-Time Sync Suite:** 10-stage end-to-end verification (`scripts/test_realtime_sync.py`) confirming multi-window detection (<4s) and fault recovery.
 - **Frontend Security (DOM XSS Remediation):** Integrated `escapeHtml()` sanitizer across all dynamic DOM rendering.
+- **Container & Kubernetes Architecture Assets:** Streamlined `docker-compose.yml` (PostgreSQL 16, RabbitMQ 3.13, API) and added educational starter Kubernetes manifests in `k8s/` (`deployment.yaml`, `service.yaml`, `configmap.yaml`, `secrets-example.yaml`).
 - **GitHub Release Package:** Added MIT `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `.env.example`, and updated relative screenshot links.
 
 ---

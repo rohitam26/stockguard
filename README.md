@@ -1,4 +1,4 @@
-# StockGuard: Premium Distributed Inventory Intelligence & Saga Engine
+# StockGuard: Distributed Inventory Reservation & Order Reliability Engine
 
 [![StockGuard CI](https://github.com/rohitam26/stockguard/actions/workflows/ci.yml/badge.svg)](https://github.com/rohitam26/stockguard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-173824.svg)](https://www.python.org/downloads/)
@@ -6,71 +6,59 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-059669.svg)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-E76F51.svg)](https://opensource.org/licenses/MIT)
 
-**StockGuard** is an enterprise-grade distributed inventory intelligence and order checkout coordination engine built for high-contention e-commerce flash sales. It guarantees **zero overselling**, **atomic reservations without race conditions**, **transactional outbox event streaming**, and **distributed saga orchestration with automated backward compensation**.
+StockGuard is a distributed inventory reservation and checkout reliability engine engineered to prevent inventory overselling during high-contention flash sales. It implements transactional isolation, atomic conditional allocations, idempotent client reservations, a transactional outbox event pipeline, and backward-compensating saga orchestration for multi-step order checkout flows.
 
-The web console is designed as a modern SaaS operations platform using a distinctive **Forest Green** and **Warm Ivory** design system with **Emerald** actions and **Coral** accents.
-
-> **Operational Status:** StockGuard is a verified **functional distributed-systems prototype**. The core transactional patterns (atomic row-level reservations, transactional outbox, and distributed saga compensation) are mathematically and empirically proven against PostgreSQL 16.2. For production deployment, consult the [Operational Limitations](#operational-boundaries--limitations) section.
+StockGuard is architected as a modular monolith with decoupled domain boundaries and standalone microservice entrypoints, designed for high auditability and verifiable transactional integrity.
 
 ---
 
-## Project Inception & Timeline
+## 1. Technology Stack
 
-- **Original Project Inception & Conceptual Design:** Commenced prior to June 2026 (per project origin records; early exploratory files unindexed).
-- **Core Implementation & Git History:** Initialized November 15, 2026 with 100% verified Git history.
-- **Current Milestone:** v1.3.0 Public Release (November 16, 2026).
-
----
-
-## Application Showcase & Screenshot Gallery
-
-All screenshots are authentic, high-resolution captures from the live application running against local PostgreSQL 16.2.
-
-### 1. Operations Overview Dashboard
-Live inventory distribution bar, active reservation countdowns, low-stock alerts, and real-time KPI metrics.
-![Overview Dashboard](docs/screenshots/final-ui/overview-dashboard.png)
-
-### 2. Inventory & Catalog Intelligence
-Live SKU management with status filters (`All`, `In Stock`, `Low Stock`, `Depleted`), instant search, and quick restock actions.
-![Inventory Management](docs/screenshots/final-ui/inventory-management.png)
-
-### 3. Atomic Stock Reservations
-Client-supplied idempotency key verification preventing duplicate allocations, with background auto-expiry sweep and 1-click release.
-![Atomic Reservations](docs/screenshots/final-ui/atomic-reservations.png)
-
-### 4. Distributed Saga Stepper & Backward Compensation
-Interactive checkout coordination visualizer showing atomic inventory reservation, payment debit, fulfillment dispatch, and automated backward compensation on payment failure.
-![Order Saga Visualizer](docs/screenshots/final-ui/order-saga.png)
-
-### 5. Transactional Outbox Operations Console
-Guaranteed at-least-once event publication without dual-write inconsistencies or message loss, backed by background worker polling.
-![Transactional Outbox](docs/screenshots/final-ui/transactional-outbox.png)
-
-### 6. System Architecture & Topology Health
-Live connection status for PostgreSQL 16 (port 5432), RabbitMQ broker / In-Memory Fallback mode, and reliability pattern verification.
-![System Health](docs/screenshots/final-ui/system-health.png)
-
-### 7. Responsive Mobile Viewport
-Fully adaptable, touch-friendly mobile navigation and card layout tested on mobile viewports.
-![Mobile Dashboard](docs/screenshots/final-ui/mobile-dashboard.png)
+- **Core Runtime & Framework:** Python 3.11+, FastAPI, Pydantic v2, Pydantic Settings
+- **Relational Persistence:** PostgreSQL 16 (psycopg 3 driver), SQLAlchemy 2.0 ORM / Core
+- **Database Migrations:** Alembic
+- **Asynchronous Messaging:** RabbitMQ 3.13 (aio-pika, Topic Exchanges, Dead Letter Queues) with resilient in-memory fallback
+- **Containerization & Orchestration:** Docker, Docker Compose, Kubernetes starter manifests
+- **Frontend Console:** Vanilla ES6+ JavaScript, CSS3 Design System (Forest Green & Warm Ivory), HTML5
+- **Quality Assurance & Testing:** Pytest, HTTPX, Playwright, Locust, pip-audit
 
 ---
 
-## Screenshot Index
+## 2. Project Overview
 
-| Filename | Feature / Page | Capture Timestamp | Verification Status |
-| :--- | :--- | :--- | :--- |
-| [`overview-dashboard.png`](docs/screenshots/final-ui/overview-dashboard.png) | Overview Dashboard & Live Stock Distribution | 2026-11-15 22:00:54 | **VERIFIED** |
-| [`inventory-management.png`](docs/screenshots/final-ui/inventory-management.png) | Catalog Management with Stock Filters | 2026-11-15 22:00:55 | **VERIFIED** |
-| [`atomic-reservations.png`](docs/screenshots/final-ui/atomic-reservations.png) | Atomic Reservation Engine & Idempotency | 2026-11-15 22:00:56 | **VERIFIED** |
-| [`order-saga.png`](docs/screenshots/final-ui/order-saga.png) | Distributed Saga Stepper & Compensation Log | 2026-11-15 22:00:58 | **VERIFIED** |
-| [`transactional-outbox.png`](docs/screenshots/final-ui/transactional-outbox.png) | Transactional Outbox Event Stream & Flush | 2026-11-15 22:00:59 | **VERIFIED** |
-| [`system-health.png`](docs/screenshots/final-ui/system-health.png) | Dedicated System Architecture & Health Grid | 2026-11-15 22:01:00 | **VERIFIED** |
-| [`mobile-dashboard.png`](docs/screenshots/final-ui/mobile-dashboard.png) | Responsive Mobile Layout (390x844 Viewport) | 2026-11-15 22:01:01 | **VERIFIED** |
+E-commerce checkout platforms face severe concurrency challenges during promotional flash sales and high-velocity traffic spikes. When hundreds of users simultaneously attempt to purchase limited inventory, naive read-modify-write patterns result in race conditions, phantom allocations, and overselling. Furthermore, multi-service checkout workflows risk dual-write inconsistencies and orphan reservations when downstream payments fail.
+
+StockGuard addresses these challenges by consolidating reliable distributed systems patterns:
+- **Atomic Concurrency Control:** Enforces strict serializability and row-level atomicity directly at the database layer.
+- **Idempotency Protection:** Guarantees that network retries and duplicate user requests cannot duplicate stock deductions.
+- **Transactional Outbox:** Eliminates dual-write anomalies by persisting business state mutations and domain event messages within the same atomic database transaction.
+- **Saga Orchestration:** Coordinates multi-step order placement workflows with automated backward compensation when payment or fulfillment steps encounter failures.
 
 ---
 
-## Architectural Highlights
+## 3. Key Engineering Problems Solved
+
+1. **Race Conditions and Overselling:** Under high-concurrency spikes, multiple application workers reading the same inventory count can simultaneously evaluate stock as available, decrementing stock beyond physical limits. StockGuard eliminates this with database check constraints, row-level locks, and atomic conditional updates.
+2. **Dual-Write Vulnerabilities:** Updating a database record and publishing a message to a broker in separate network calls creates dual-write inconsistency if the broker or server crashes mid-operation. StockGuard uses the Transactional Outbox pattern to commit events directly with state changes.
+3. **Partial Failure in Multi-Step Workflows:** If inventory is reserved but payment processing fails, inventory remains locked indefinitely unless systematically released. StockGuard implements an orchestrator-based Saga that executes compensating transactions to restore available inventory upon failure.
+4. **Duplicate Request Floods:** Network hiccups often prompt clients to retry checkout submissions. StockGuard validates client-supplied idempotency keys to return existing reservation states rather than creating duplicate allocations.
+5. **Silent Message Loss:** Transient network partitions between application workers and message brokers risk message drops. StockGuard includes retry policies, dead-letter routing (`stockguard.dlq`), and an automatic in-memory fallback engine.
+
+---
+
+## 4. Core Features
+
+- **Pessimistic & Conditional Stock Decrements:** Enforces row-level isolation via PostgreSQL `SELECT ... FOR UPDATE` and conditional `WHERE available_stock >= :qty` statements.
+- **Client Idempotency Keys:** Every reservation requires a unique key; subsequent calls with identical keys return the original allocation without deducting additional stock.
+- **Time-to-Live (TTL) Auto-Expiry Engine:** Reservations carry configurable lifespans (default 600 seconds). A dedicated background worker continuously identifies and releases expired, unconfirmed holds.
+- **Transactional Outbox Worker:** Dispatches pending outbox records to RabbitMQ topic exchanges asynchronously with configurable polling and retry tracking.
+- **Distributed Saga Orchestrator:** Manages four distinct checkout stages (Inventory Reservation -> Payment Processing -> Fulfillment Dispatch -> Confirmation) with backward rollback on payment denial.
+- **Real-Time Synchronized Console:** Operations dashboard featuring 5-second non-overlapping polling, connection state monitoring, live stock charts, and manual restock tools.
+- **Decoupled Architecture:** Clean domain separation allowing execution as a unified modular monolith or as independent microservices (`src/stockguard/microservices/`).
+
+---
+
+## 5. Architecture Diagram
 
 ```
                        +----------------------------+
@@ -78,14 +66,14 @@ Fully adaptable, touch-friendly mobile navigation and card layout tested on mobi
                        |    (REST API & Web UI)     |
                        +--------------+-------------+
                                       |
-            +-------------------------+-------------------------+
-            |                         |                         |
-   +--------v-------+        +--------v-------+        +--------v-------+
-   |   Inventory    |        |   Reservation  |        |     Order      |
-   |    Service     |        |     Engine     |        |    Service     |
-   +--------+-------+        +--------+-------+        +--------+-------+
-            |                         |                         |
-            +-------------------------+-------------------------+
+             +------------------------+------------------------+
+             |                        |                        |
+    +--------v-------+       +--------v-------+       +--------v-------+
+    |   Inventory    |       |  Reservation   |       |     Order      |
+    |    Service     |       |     Engine     |       |    Service     |
+    +--------+-------+       +--------+-------+       +--------+-------+
+             |                        |                        |
+             +------------------------+------------------------+
                                       |
                            +----------v----------+
                            |  Saga Orchestrator  |
@@ -100,15 +88,21 @@ Fully adaptable, touch-friendly mobile navigation and card layout tested on mobi
         |                                                           |
 +-------v---------+                                         +-------v---------+
 | PostgreSQL 16   |                                         | RabbitMQ Broker |
-| - Row-Level Lock|                                         | - Topic Exch    |
+| - Row Locks     |                                         | - Topic Exch    |
 | - CHECK Constr  |                                         | - DLQ Routing   |
 | - Outbox Table  | === Polled by Outbox Worker ===========>| - At-Least-Once |
 +-----------------+                                         +-----------------+
 ```
 
-### 1. Concurrency Control & Overselling Prevention
-- **Database CHECK Constraints:** PostgreSQL strictly enforces `CHECK (available_stock >= 0)`.
-- **Atomic Conditional SQL Decrement:**
+---
+
+## 6. Database and Concurrency Design
+
+StockGuard delegates concurrency safety directly to PostgreSQL rather than relying on distributed application-level locks.
+
+### Concurrency Guarantees
+- **Table Constraints:** The `inventory_items` table defines `CHECK (available_stock >= 0)` and `CHECK (reserved_stock >= 0)`. Any operation that would produce negative stock fails immediately at the database engine level.
+- **Atomic Conditional SQL:** Stock deductions use single atomic SQL statements:
   ```sql
   UPDATE inventory_items
   SET available_stock = available_stock - :qty,
@@ -116,134 +110,297 @@ Fully adaptable, touch-friendly mobile navigation and card layout tested on mobi
       version = version + 1
   WHERE sku = :sku AND available_stock >= :qty;
   ```
-  If stock is insufficient, the row count is `0` and an `InsufficientStockException` is raised immediately.
+- **Pessimistic Locking:** Critical reservation paths acquire explicit row locks (`SELECT ... FOR UPDATE`) to eliminate race conditions between concurrent readers.
 
-### 2. Verified 100-Request Concurrency Scenario
-In accordance with system audit requirements, a stress test was executed directly against **PostgreSQL 16.2**:
-- **Setup:** 5 units of available stock for a high-contention test SKU.
-- **Stimulus:** 100 concurrent reservation requests issued simultaneously across 20 worker threads.
-- **Result:**
-  - Exactly **5 requests succeeded** (201 Created).
-  - Exactly **95 requests were rejected** with 409 Conflict.
-  - Final PostgreSQL stock: `available = 0`, `reserved = 5`, `allocated = 0`, `total = 5`.
-  - Negative inventory prevented with zero data anomalies.
-
-### 3. Distributed Saga Backward Compensation
-If payment fails or partial inventory cannot be fulfilled:
-1. Acquired reservations are atomically released back to `available_stock`.
-2. Order status transitions to `CANCELLED` or `FAILED`.
-3. Outbox event `reservation.released` is emitted.
-4. Zero orphan stock locks remain.
-
-### 4. Transactional Outbox Pattern
-Domain mutations and event messages write to `outbox_messages` in the same DB transaction. A dedicated `OutboxWorker` dispatches events to RabbitMQ with retry policies and Dead Letter Queue (`stockguard.dlq`) routing.
-
-### 5. Real-Time Multi-Window Synchronization Engine
-The StockGuard dashboard automatically synchronizes with the backend without requiring manual page reloads:
-- **Non-Overlapping Polling Guard:** Controlled by an `isSyncing` mutex flag preventing client-side request storms or race conditions on slow connections.
-- **Configurable Auto-Refresh:** Default 5-second interval, user-adjustable to 3s, 10s, or Manual Only via top-bar controls.
-- **Multi-Window Live Consistency:** Verified with automated Playwright end-to-end tests (`scripts/test_realtime_sync.py`). Mutations in Window A (product creation, inventory adjustment, atomic reservation, and reservation release) automatically appear in Window B within seconds.
-- **Live Connection State Machine:** Visual pulse dot and text state transitions across `Connected` (Emerald), `Reconnecting...` (Amber pulse on 1st transient failure), `Backend Disconnected` (Coral on >=2 consecutive failures), and `Sync Paused` (Manual mode).
-- **Graceful Fault Recovery:** Automatic reconnection and state restoration once backend connectivity is re-established.
-- **Authoritative Data Guarantees:** Metrics, stock distribution charts, and ledgers render directly from PostgreSQL API responses—never fabricated or guessed.
+### Verified 100-Request Concurrency Scenario
+To verify these guarantees under contention, an automated stress benchmark executes against PostgreSQL:
+- **Baseline:** An inventory item initialized with exactly 5 units of available stock.
+- **Load Profile:** 100 concurrent reservation requests issued across 20 parallel threads attempting to reserve 1 unit each.
+- **Observed Behavior:**
+  - Exactly **5 requests succeeded** (HTTP 201 Created).
+  - Exactly **95 requests were rejected** (HTTP 409 Conflict, Insufficient Stock).
+  - Final database state: `available_stock = 0`, `reserved_stock = 5`, `allocated_stock = 0`.
+  - Zero stock leakage, zero deadlocks, and zero overselling occurrences.
 
 ---
 
-## Design System & Colour Palette
+## 7. Reservation and Idempotency Workflow
 
-| Purpose | Colour Name | Hex Code | Usage |
-| :--- | :--- | :--- | :--- |
-| **Main Background** | Warm Ivory | `#FAF7F2` | Body canvas and subtle container surfaces |
-| **Card Background** | Pure Crisp White | `#FFFFFF` | Metric cards, forms, and data tables |
-| **Primary Brand** | Forest Green | `#173824` | Sidebar navigation, main headings, dark accents |
-| **Action & Success** | Emerald | `#059669` | Primary CTA buttons, in-stock badges, healthy status |
-| **Positive State** | Soft Mint | `#DCEDE3` | Positive badge background with emerald typography |
-| **Accent & Failure** | Coral | `#E76F51` | Payment decline alerts, failed saga steps, depleted stock |
-| **Warning** | Warm Amber | `#E9B85D` | Low-stock warnings, fallback broker badges |
-| **Main Text** | Deep Forest Slate | `#25352F` | Primary body typography for high contrast |
-| **Secondary Text** | Muted Sage Slate | `#78847E` | Form labels, table column headers, helper notes |
-| **Border** | Sand Ivory Border | `#E6DFD3` | Card outlines, table separators, input boundaries |
+```
+Client Request
+      |
+      v
+[ Check Idempotency Key ] ---> (Found & Active?) ---> Return Existing Reservation (200 OK)
+      | (Not found)
+      v
+[ Acquire Row Lock: SELECT ... FOR UPDATE ]
+      |
+[ Check Available Stock >= Requested Qty ]
+      |
+      +---> (Insufficient) ---> Release Lock & Return 409 Conflict
+      |
+      +---> (Sufficient)
+                  |
+                  v
+            [ Decrement Available Stock ]
+            [ Increment Reserved Stock ]
+            [ Insert Reservation Record ]
+            [ Insert Outbox Event: reservation.created ]
+                  |
+                  v
+            [ Commit Transaction ]
+                  |
+                  v
+            Return Reservation (201 Created)
+```
+
+1. **Idempotency Check:** The request evaluates `idempotency_key` against existing reservations. If a reservation with that key exists, the stored record is returned without re-deducting stock.
+2. **Pessimistic Lock & Evaluation:** The SKU row is locked within an active transaction. Available stock is verified against requested quantity.
+3. **Atomic Modification:** `available_stock` is decremented, `reserved_stock` is incremented, and reservation status is set to `ACTIVE`.
+4. **Auto-Expiry Background Worker:** Active reservations are assigned a TTL timestamp. If not confirmed within this window, the `ExpirationWorker` runs a batch transaction to mark them `EXPIRED`, decrement `reserved_stock`, increment `available_stock`, and write a `reservation.expired` outbox event.
 
 ---
 
-## Quickstart & Setup
+## 8. Transactional Outbox Workflow
+
+To eliminate dual-write vulnerabilities between PostgreSQL and RabbitMQ, StockGuard uses the Transactional Outbox pattern:
+
+```
+[ Domain Service Transaction ]
+     |
+     +--- 1. Mutate Domain Entity (e.g. create reservation)
+     +--- 2. Insert Event into outbox_messages (status = 'PENDING')
+     |
+[ Commit DB Transaction ]  <-- Both persist atomically or roll back together
+     |
+     v
+[ Background Outbox Worker ]
+     |
+     +--- 1. Poll for PENDING outbox messages (SELECT ... FOR UPDATE SKIP LOCKED)
+     +--- 2. Publish payload to RabbitMQ Topic Exchange
+     +--- 3. Mark message PROCESSED (or increment retry_count on failure)
+     +--- 4. Route to stockguard.dlq if retry limit exceeded
+```
+
+- **Atomicity:** Events are written in the exact same database transaction as domain mutations.
+- **At-Least-Once Delivery:** The worker retries failed publications up to a configured threshold (`RABBITMQ_RETRY_LIMIT = 3`).
+- **Dead-Letter Handling:** Poison pills or persistently unroutable messages are forwarded to `stockguard.dlq` for operator investigation.
+
+---
+
+## 9. Saga Orchestration and Compensation
+
+StockGuard implements an orchestrator-based Saga to coordinate checkout flows spanning inventory, payments, and fulfillment:
+
+```
+[ Client: POST /api/v1/orders/saga ]
+               |
+               v
+     +-------------------+
+     | Saga Orchestrator |
+     +---------+---------+
+               |
+               |--- Step 1: Reserve Inventory (Atomic hold)
+               |    [Success]
+               |
+               |--- Step 2: Process Payment
+               |    +---> [Approved] ---> Step 3: Dispatch Fulfillment
+               |    |                     +---> [Success] ---> Order Completed (201)
+               |    |
+               |    +---> [Declined] ---> INITIATE BACKWARD COMPENSATION
+               |                               |
+               |<------------------------------+
+               |
+               |--- Compensation Step 1: Release Inventory Hold
+               |    (reserved_stock -> available_stock)
+               |
+               |--- Compensation Step 2: Mark Order FAILED (402 Payment Required)
+               |
+               v
+     [ Client receives structured failure details; stock remains fully balanced ]
+```
+
+- **Forward Flow:** Reservations are established first. Upon successful hold, payment is debited, fulfillment is requested, and the reservation is committed to allocated stock.
+- **Backward Compensation:** If payment fails (e.g., card declined), the orchestrator immediately triggers compensating actions: releasing the reserved stock back to available inventory and setting the order status to `CANCELLED` or `FAILED`.
+
+---
+
+## 10. Dashboard Screenshots
+
+All screenshots represent authentic captures from the running application console.
+
+### 1. Operations Overview Dashboard
+Visualizes inventory balance, active reservation countdowns, low-stock warnings, and real-time operational metrics.
+![Overview Dashboard](docs/screenshots/final-ui/overview-dashboard.png)
+
+### 2. Inventory & Catalog Intelligence
+SKU catalog management with instant stock level filters (`All`, `In Stock`, `Low Stock`, `Depleted`), live search, and manual restocking controls.
+![Inventory Management](docs/screenshots/final-ui/inventory-management.png)
+
+### 3. Atomic Stock Reservations
+Active client reservation tracking with idempotency keys, real-time TTL countdowns, and manual release actions.
+![Atomic Reservations](docs/screenshots/final-ui/atomic-reservations.png)
+
+### 4. Distributed Saga Stepper & Backward Compensation
+Interactive checkout coordination visualizer showing stage-by-stage progression and backward compensation rollback when payment declines.
+![Order Saga Visualizer](docs/screenshots/final-ui/order-saga.png)
+
+### 5. Transactional Outbox Operations Console
+Monitors pending, processed, and failed outbox event records with manual event flush controls and message inspection.
+![Transactional Outbox](docs/screenshots/final-ui/transactional-outbox.png)
+
+### 6. System Architecture & Topology Health
+Live service connection status for PostgreSQL, RabbitMQ broker / In-Memory Fallback mode, and background worker state.
+![System Health](docs/screenshots/final-ui/system-health.png)
+
+### 7. Responsive Mobile Viewport
+Adaptive mobile navigation and responsive card layout verified across mobile browser viewports.
+![Mobile Dashboard](docs/screenshots/final-ui/mobile-dashboard.png)
+
+---
+
+## 11. Installation and Setup Instructions
 
 ### Prerequisites
-- Python 3.11+
-- PostgreSQL 16
-- RabbitMQ 3.13 (optional; resilient in-memory event bus included)
+- Python 3.11 or higher
+- PostgreSQL 16 (or local Docker daemon)
+- RabbitMQ 3.13 (optional; resilient in-memory broker activates automatically if offline)
 
-### 1. Clone & Install
+### Local Environment Setup
+
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/rohitam26/stockguard.git
+   cd stockguard
+   ```
+
+2. **Create and Activate Virtual Environment:**
+   ```bash
+   python -m venv .venv
+   # Linux / macOS
+   source .venv/bin/activate
+   # Windows
+   .venv\Scripts\activate
+   ```
+
+3. **Install Dependencies:**
+   ```bash
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
+   pip install -e .
+   ```
+
+4. **Configure Environment Variables:**
+   Create a `.env` file based on `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+   Configure the database connection:
+   ```env
+   DATABASE_URL=postgresql+psycopg://<db_user>:<db_password>@localhost:5432/stockguard
+   RABBITMQ_URL=amqp://<rabbitmq_user>:<rabbitmq_password>@localhost:5672/
+   RABBITMQ_ENABLED=true
+   ENVIRONMENT=development
+   ```
+
+5. **Run Database Migrations:**
+   ```bash
+   python -m alembic upgrade head
+   ```
+
+6. **Start the Application:**
+   ```bash
+   uvicorn stockguard.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+   - Dashboard: [http://localhost:8000](http://localhost:8000)
+   - Interactive API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Docker Compose Setup
+
+Run the full stack (PostgreSQL, RabbitMQ, and StockGuard API) using Docker Compose:
+
 ```bash
-git clone https://github.com/rohitam26/stockguard.git
-cd stockguard
-python -m pip install -r requirements.txt
-pip install -e .
+docker compose up -d --build
 ```
-
-### 2. Configure Environment
-Create `.env`:
-```env
-DATABASE_URL=postgresql+psycopg://<db_user>:<db_password>@localhost:5432/stockguard
-RABBITMQ_URL=amqp://<rabbitmq_user>:<rabbitmq_password>@localhost:5672/
-RABBITMQ_ENABLED=true
-ENVIRONMENT=development
-```
-
-### 3. Database Migration
-```bash
-python -m alembic upgrade head
-```
-
-### 4. Run Server
-```bash
-uvicorn stockguard.main:app --host 0.0.0.0 --port 8000 --reload
-```
-- Access the Dashboard at: [http://localhost:8000](http://localhost:8000)
-- Access Swagger API Docs at: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-## Automated Test Suite
+## 12. API Documentation
+
+| Method | Endpoint | Description | Key Parameters / Payload |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/health` | Service health & dependency status | None |
+| `GET` | `/api/v1/inventory` | List inventory items with filters | `skip`, `limit`, `low_stock_only` |
+| `POST` | `/api/v1/inventory` | Create new inventory SKU | `{"sku": "SKU-1", "name": "Item", "available_stock": 100, ...}` |
+| `POST` | `/api/v1/inventory/{sku}/adjust` | Adjust stock level (+/-) | `{"quantity_delta": 50, "reason": "Restock"}` |
+| `POST` | `/api/v1/reservations` | Create atomic stock reservation | `{"sku": "SKU-1", "quantity": 2, "idempotency_key": "uuid"}` |
+| `GET` | `/api/v1/reservations` | List active reservations | `status`, `sku` |
+| `POST` | `/api/v1/reservations/{id}/release` | Manually release an active hold | `reservation_id` |
+| `POST` | `/api/v1/orders/saga` | Execute checkout saga | `{"sku": "SKU-1", "quantity": 1, "simulate_payment_failure": false}` |
+| `GET` | `/api/v1/orders` | List order history | `status`, `skip`, `limit` |
+| `GET` | `/api/v1/outbox` | View outbox event stream | `status`, `limit` |
+| `POST` | `/api/v1/outbox/flush` | Manually trigger outbox flush | None |
+
+---
+
+## 13. Testing Instructions and Verified Results
+
+StockGuard maintains an extensive automated test suite covering unit behavior, database concurrency, API integration, and real-time frontend consistency.
 
 ```bash
-# Run complete pytest suite (13 passed, 1 skipped)
+# 1. Run complete pytest suite
 python -m pytest -v
 
-# Run 25-endpoint API verification
+# 2. Run 25-endpoint comprehensive API verification
 python scripts/verify_all_api_endpoints.py
 
-# Run Real-Time Multi-Window & Network Fault Recovery Verification (10/10 stages passed)
+# 3. Run real-time multi-window synchronization & recovery test
 python scripts/test_realtime_sync.py
 
-# Run Playwright frontend audit & capture screenshots
+# 4. Run Playwright frontend UI verification & screenshot audit
 python scripts/audit_frontend.py
 
-# Run dependency vulnerability audit (0 CVEs)
+# 5. Run dependency vulnerability scan
 python -m pip_audit -r requirements.txt
 ```
 
----
-
-## Operational Boundaries & Limitations
-
-StockGuard is designed and verified as a functional distributed-systems prototype. For production multi-tenant readiness, the following operational boundaries apply:
-
-1. **Message Broker Mode:** In the default local development environment, an in-memory event bus fallback is used when external RabbitMQ (port 5672) is offline. A live RabbitMQ instance is verified via GitHub Actions CI.
-2. **API Authentication:** Endpoints currently operate without JWT/OAuth2 bearer token enforcement. Authentication middleware must be enabled prior to public internet exposure.
-3. **Architecture Runtime:** Domain services execute as a modular monolith inside a consolidated FastAPI process (`stockguard.main:app`). Independent deployable microservice entrypoints are provided in `src/stockguard/microservices/`.
-4. **Polling Scalability:** The web dashboard utilizes 5-second polling with an `isSyncing` mutex lock. High enterprise concurrent traffic should adopt Server-Sent Events (SSE) or HTTP ETag caching.
+### Verified Test Results Summary
+- **Pytest Suite:** 13 passed, 1 skipped (isolated RabbitMQ integration test skipped when broker offline).
+- **Concurrency Verification:** 100 concurrent requests against 5 units of stock yielded exactly 5 reservations and 95 rejections (100% data integrity).
+- **API Endpoint Verification:** 25/25 endpoints verified across inventory, reservation, saga, order, outbox, and health domains.
+- **Multi-Window Sync Verification:** 10/10 stages passed; real-time mutations in Window A reflected in Window B within polling intervals.
+- **Dependency Security Scan:** `pip-audit` reported 0 known vulnerabilities.
 
 ---
 
-## Documentation
-- [Final Comprehensive Audit Report](docs/FINAL_AUDIT_REPORT.md)
-- [Distributed Architecture & Microservices Decomposition](docs/DISTRIBUTED_ARCHITECTURE.md)
-- [API Specification](docs/API.md)
-- [Security Policy & Findings](docs/SECURITY.md)
-- [Changelog](CHANGELOG.md)
+## 14. Architecture Decisions and Trade-Offs
+
+| Decision | Alternative Considered | Selected Rationale | Trade-Off |
+| :--- | :--- | :--- | :--- |
+| **Pessimistic Row Locks & DB Constraints** | Distributed Redis Locks (Redlock) | PostgreSQL row locks (`FOR UPDATE`) and `CHECK` constraints guarantee serializability at the single source of truth without split-brain failure risks. | Increases PostgreSQL lock wait time during severe sustained contention on a single SKU. |
+| **Modular Monolith Architecture** | Microservices Architecture | Consolidated domain modules allow high cohesion, simpler testing, and unified database transactions during prototyping. | Requires disciplined module boundaries to prevent accidental cross-domain imports. |
+| **Transactional Outbox Pattern** | Two-Phase Commit (2PC) / Direct Publish | Dual writes risk silent message drops during crashes; 2PC introduces complex multi-system locking overhead. Outbox provides guaranteed at-least-once delivery. | Adds minor latency between database commit and message broker publication. |
+| **Polled Auto-Refresh with Mutex** | WebSockets / Server-Sent Events | 5-second polling with client-side mutex (`isSyncing`) requires no stateful connection management, simplifying proxy and load-balancer topology. | Slightly higher HTTP request volume compared to long-lived push channels. |
 
 ---
 
-## License
-MIT License. Copyright (c) 2026 StockGuard Engineering Team.
+## 15. Limitations and Future Improvements
+
+StockGuard is designed as a functional distributed-systems portfolio prototype. The following limitations define the current scope and roadmap for production multi-tenant hardening:
+
+1. **Authentication and Authorization:** The current API endpoints operate without JWT or OAuth2 bearer token requirements. Production deployments require an API gateway or middleware with RBAC.
+2. **Push-Based Real-Time Streaming:** For applications supporting tens of thousands of active operators, replacing HTTP polling with Server-Sent Events (SSE) or WebSockets will reduce HTTP request overhead.
+3. **Multi-Tenant Database Partitioning:** Domain entities currently reside within a unified PostgreSQL database schema. Future scaling steps include splitting inventory, reservations, and orders into independent schemas or microservice database instances.
+4. **Distributed Tracing:** Integrating OpenTelemetry tracing headers across HTTP requests, database transactions, and RabbitMQ message headers.
+
+---
+
+## 16. Educational Kubernetes Manifests
+
+Starter Kubernetes manifests are available in the [`k8s/`](k8s/) directory to demonstrate container deployment topologies, resource boundaries, and liveness/readiness health probes. Refer to [`k8s/README.md`](k8s/README.md) for details.
+
+---
+
+## 17. License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

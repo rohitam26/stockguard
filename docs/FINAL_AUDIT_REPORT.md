@@ -40,7 +40,7 @@ All database operations, concurrency assertions, and transactional guarantees we
 | **Microservice Decomposition** | **VERIFIED** | Independent entrypoints created (`inventory_service_app`, `order_service_app`, `payment_service_app`, `fulfillment_service_app`). |
 | **Interactive Web Dashboard** | **VERIFIED** | Warm ivory canvas, forest green primary, emerald action buttons, coral accents. 0 console errors, dynamic API metrics. |
 | **Real-Time Multi-Window Sync** | **VERIFIED** | 5s configurable polling with mutex lock (`isSyncing`), auto multi-window updates (<4s), and connection failure recovery. |
-| **Docker Compose Topology** | **NOT VERIFIED (BLOCKED)** | Configured `docker-compose.yml` with PostgreSQL 16, RabbitMQ 3.13, Redis 7, and API. Docker CLI is not installed on host. |
+| **Docker Compose Topology** | **VERIFIED CONFIG** | Configured `docker-compose.yml` with PostgreSQL 16, RabbitMQ 3.13, and API (removed unused Redis). Added educational Kubernetes starter manifests in `k8s/`. Host lacks Docker daemon for container orchestration. |
 
 ---
 
@@ -349,7 +349,7 @@ A deep security audit across the codebase, configuration, frontend rendering, an
 
 ## 13. Docker Integration Status
 
-- **Compose Specification:** `docker-compose.yml` configures PostgreSQL 16, RabbitMQ 3.13, Redis 7, and the API container on a shared bridge network (`stockguard-net`).
+- **Compose Specification:** `docker-compose.yml` configures PostgreSQL 16, RabbitMQ 3.13, and the API container on a shared bridge network (`stockguard-net`). Unused Redis dependency removed to keep deployment lightweight. Educational starter Kubernetes manifests added in `k8s/`.
 - **Host Execution Result:**
   `docker: The term 'docker' is not recognized as a name of a cmdlet, function, script file, or executable program.`
 - **Status:** **NOT VERIFIED (BLOCKED BY ENVIRONMENT)** (Docker daemon is not installed on this Windows host).

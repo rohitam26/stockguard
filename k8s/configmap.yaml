@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockguard-config
+  labels:
+    app.kubernetes.io/name: stockguard
+    app.kubernetes.io/component: config
+data:
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  API_V1_STR: "/api/v1"
+  RABBITMQ_ENABLED: "true"
+  RABBITMQ_EXCHANGE: "stockguard.topic"
+  RABBITMQ_DLQ_EXCHANGE: "stockguard.dlq"
+  RABBITMQ_RETRY_LIMIT: "3"
+  DEFAULT_RESERVATION_TTL_SECONDS: "600"
+  OUTBOX_POLL_INTERVAL_SECONDS: "1.0"
+  EXPIRATION_POLL_INTERVAL_SECONDS: "2.0"
+  DB_POOL_SIZE: "20"
+  DB_MAX_OVERFLOW: "10"
