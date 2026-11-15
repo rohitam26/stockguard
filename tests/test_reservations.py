@@ -44,6 +44,11 @@ def test_atomic_reservation_and_idempotency(client: TestClient):
     res_data2 = res2.json()
     assert res_data2["id"] == res_data1["id"], "Idempotent request must return existing reservation"
 
+    # Check list reservations endpoint
+    res_list = client.get("/api/v1/reservations")
+    assert res_list.status_code == 200
+    assert any(r["id"] == res_data1["id"] for r in res_list.json())
+
     # Inventory must NOT be deducted again
     inv_after = client.get(f"/api/v1/inventory/{sku}").json()
     assert inv_after["available_stock"] == 6

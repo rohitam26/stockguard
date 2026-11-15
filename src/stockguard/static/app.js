@@ -66,8 +66,16 @@ document.addEventListener("DOMContentLoaded", () => {
         dbText.textContent = "DB Degraded";
       }
 
-      mqText.textContent = data.messaging.broker;
-      archMqDesc.textContent = `${data.messaging.broker} (Topology Declared)`;
+      const mqDot = document.getElementById("mqStatusDot");
+      if (data.messaging.connected) {
+        mqText.textContent = `${data.messaging.broker} Connected`;
+        if (mqDot) mqDot.className = "status-dot healthy";
+        archMqDesc.textContent = `${data.messaging.broker} (Topology Declared, Exchanges & Queues Bound)`;
+      } else {
+        mqText.textContent = "In-Memory Bus (Fallback)";
+        if (mqDot) mqDot.className = "status-dot degraded";
+        archMqDesc.textContent = "In-Memory Event Bus (Fallback active: External RabbitMQ broker unreachable on port 5672)";
+      }
     } catch (e) {
       console.error("Health fetch error:", e);
     }
@@ -262,9 +270,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Fetch Reservations
   async function fetchReservations() {
     try {
-      // In a real system or with our endpoint:
-      // Let's call /api/v1/orders or inspect active state
-      renderReservationsTable();
+      const res = await fetch("/api/v1/reservations");
+      if (res.ok) {
+        reservations = await res.json();
+        renderReservationsTable();
+        updateKPIs();
+      }
     } catch (e) {
       console.error("Reservations fetch error:", e);
     }
@@ -589,6 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnRefreshAll.addEventListener("click", async () => {
       await fetchHealth();
       await fetchInventoryAndProducts();
+      await fetchReservations();
       await fetchOrders();
       await fetchOutbox();
       showToast("Data refreshed", "info");
@@ -598,6 +610,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initial Boot
   fetchHealth();
   fetchInventoryAndProducts();
+  fetchReservations();
   fetchOrders();
   fetchOutbox();
 });

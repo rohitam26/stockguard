@@ -29,6 +29,15 @@ def create_reservation(req: ReservationCreateRequest, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
+@router.get("", response_model=list[ReservationResponse])
+def list_reservations(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    return ReservationService.list_reservations(db, skip=skip, limit=limit)
+
+
 @router.get("/{reservation_id}", response_model=ReservationResponse)
 def get_reservation(reservation_id: str, db: Session = Depends(get_db)):
     try:

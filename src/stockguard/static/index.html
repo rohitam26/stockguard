@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StockGuard - Distributed Inventory & Saga Engine</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%233b82f6'/></svg>">
   <link rel="stylesheet" href="/static/app.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -203,7 +204,7 @@
             <form id="formCreateProduct" class="standard-form">
               <div class="form-group">
                 <label for="pSku">SKU (Stock Keeping Unit)</label>
-                <input type="text" id="pSku" required placeholder="e.g. LAPTOP-PRO-16" pattern="[A-Za-z0-9-_]{2,64}">
+                <input type="text" id="pSku" required placeholder="e.g. LAPTOP-PRO-16" pattern="[A-Za-z0-9_\-]{2,64}">
               </div>
               <div class="form-group">
                 <label for="pName">Product Name</label>

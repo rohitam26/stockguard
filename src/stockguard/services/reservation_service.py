@@ -116,6 +116,19 @@ class ReservationService:
         return reservation
 
     @staticmethod
+    def list_reservations(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        status: ReservationStatus | None = None
+    ) -> list[Reservation]:
+        query = select(Reservation)
+        if status is not None:
+            query = query.where(Reservation.status == status)
+        query = query.offset(skip).limit(limit).order_by(Reservation.created_at.desc())
+        return list(db.execute(query).scalars().all())
+
+    @staticmethod
     def get_reservation(db: Session, reservation_id: str) -> Reservation:
         res = db.execute(
             select(Reservation).where(Reservation.id == reservation_id)
