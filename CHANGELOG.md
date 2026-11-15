@@ -2,6 +2,37 @@
 
 All notable changes to the StockGuard project are documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Project Inception] - Prior to June 2026
+- **Conceptual Design & Core Algorithms:** Initial conceptualization and preliminary architecture for distributed inventory coordination, row-locking reservation semantics, and transactional outbox patterns (early exploratory files unindexed).
+
+---
+
+## [1.3.0] - 2026-11-16
+
+### Added
+- **Real-Time Multi-Window Polling Engine:** Configurable 5-second polling with non-overlapping `isSyncing` request mutex and DOM-level cleanup.
+- **Dynamic Connection State Machine:** Visual pulse indicators across `Connected`, `Reconnecting...`, `Backend Disconnected` (after $\ge 2$ failures), and `Sync Paused`.
+- **Automated Playwright Real-Time Sync Suite:** 10-stage end-to-end verification (`scripts/test_realtime_sync.py`) confirming multi-window detection (<4s) and fault recovery.
+- **Frontend Security (DOM XSS Remediation):** Integrated `escapeHtml()` sanitizer across all dynamic DOM rendering.
+- **GitHub Release Package:** Added MIT `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `.env.example`, and updated relative screenshot links.
+
+---
+
+## [1.2.0] - 2026-11-15
+
+### Added
+- **UI/UX Design System:** Forest Green (`#173824`), Warm Ivory (`#FAF7F2`), Emerald (`#059669`), and Coral (`#E76F51`) modern SaaS theme.
+- **Live Stock Allocation Track:** Tri-color distribution bar visualizer for Available, Reserved, and Allocated inventory.
+- **Independent Microservice Entrypoints:** Decoupled FastAPI apps in `src/stockguard/microservices/` with strict Pydantic contracts.
+- **Durable AMQP Consumer Worker:** `RabbitMQConsumerWorker` with manual `basic_ack`/`basic_nack` and database deduplication.
+
+---
+
 ## [1.0.0] - 2026-11-15
 
 ### Added

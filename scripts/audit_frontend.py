@@ -6,13 +6,17 @@ def run_frontend_audit():
     console_errors = []
     page_errors = []
 
+    final_ui_dir = os.path.abspath("docs/screenshots/final-ui")
+    os.makedirs(final_ui_dir, exist_ok=True)
+    root_screenshots_dir = os.path.abspath("docs/screenshots")
+
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(channel="chrome", headless=True)
         except Exception:
             browser = p.chromium.launch(channel="msedge", headless=True)
 
-        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        context = browser.new_context(viewport={"width": 1440, "height": 920})
         page = context.new_page()
 
         page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -22,13 +26,20 @@ def run_frontend_audit():
         page.goto("http://127.0.0.1:8000/", wait_until="networkidle")
         time.sleep(2)
 
-        # 1. Test Navigation Links & Tabs
-        tabs = ["tab-overview", "tab-inventory", "tab-reservations", "tab-orders", "tab-events"]
+        # 1. Test Navigation Links & Tabs (All 6 tabs)
+        tabs = [
+            "tab-overview",
+            "tab-inventory",
+            "tab-reservations",
+            "tab-orders",
+            "tab-events",
+            "tab-health"
+        ]
         tab_results = {}
         for tab in tabs:
             btn = page.locator(f"button[data-tab='{tab}']")
             btn.click()
-            time.sleep(0.5)
+            time.sleep(0.4)
             pane = page.locator(f"#{tab}")
             is_active = "active" in pane.get_attribute("class")
             tab_results[tab] = is_active
@@ -36,7 +47,7 @@ def run_frontend_audit():
 
         # Return to Overview
         page.click("button[data-tab='tab-overview']")
-        time.sleep(1)
+        time.sleep(0.5)
 
         # 2. Check Metrics on Overview
         kpi_skus = page.locator("#kpiTotalSkus").inner_text()
@@ -53,23 +64,29 @@ def run_frontend_audit():
         time.sleep(0.5)
         test_sku = f"FE-UI-{int(time.time())}"
         page.fill("#pSku", test_sku)
-        page.fill("#pName", "Frontend Test Gadget")
-        page.fill("#pPrice", "89.50")
-        page.fill("#pStock", "15")
-        page.fill("#pThreshold", "3")
+        page.fill("#pName", "Frontend Intelligence Terminal")
+        page.fill("#pPrice", "129.99")
+        page.fill("#pStock", "25")
+        page.fill("#pThreshold", "5")
         page.click("#formCreateProduct button[type='submit']")
         time.sleep(1.5)
         print(f"Submitted create product form for {test_sku}")
 
-        # 4. Test Stock Adjustment Form
+        # 4. Test Stock Filter Buttons
+        for f in ["all", "in_stock", "low_stock", "depleted"]:
+            page.click(f"button[data-filter='{f}']")
+            time.sleep(0.3)
+        page.click("button[data-filter='all']")
+
+        # 5. Test Stock Adjustment Form
         page.select_option("#adjSku", value=test_sku)
-        page.fill("#adjDelta", "5")
+        page.fill("#adjDelta", "10")
         page.fill("#adjReason", "UI manual restock test")
         page.click("#formAdjustStock button[type='submit']")
         time.sleep(1.5)
-        print("Submitted stock adjustment form (+5)")
+        print("Submitted stock adjustment form (+10)")
 
-        # 5. Test Reservation Creation Form
+        # 6. Test Reservation Creation Form
         page.click("button[data-tab='tab-reservations']")
         time.sleep(0.5)
         page.select_option("#resSku", value=test_sku)
@@ -78,7 +95,7 @@ def run_frontend_audit():
         time.sleep(1.5)
         print("Submitted reservation creation form (qty 2)")
 
-        # 6. Test Order Checkout & Saga Stepper
+        # 7. Test Order Checkout & Saga Stepper
         page.click("button[data-tab='tab-orders']")
         time.sleep(0.5)
         page.fill("#ordCustomer", "cust-ui-tester")
@@ -91,34 +108,68 @@ def run_frontend_audit():
         saga_log = page.locator("#sagaLog").inner_text()
         print("Saga Execution Log:\n", saga_log[:300])
 
-        # 7. Test Responsive Breakpoint (Mobile 375x812)
-        page.set_viewport_size({"width": 375, "height": 812})
-        time.sleep(1)
-        mobile_title = page.locator("#pageTitle").is_visible()
-        print(f"Mobile view title visible: {mobile_title}")
+        # 8. CAPTURE ALL 7 REQUIRED SCREENSHOTS IN docs/screenshots/final-ui/
+        print("\nCapturing all 7 screenshots in docs/screenshots/final-ui/ ...")
 
-        # Capture updated screenshots
-        output_dir = os.path.abspath("docs/screenshots")
-        page.set_viewport_size({"width": 1400, "height": 900})
+        # 1. overview-dashboard.png
         page.click("button[data-tab='tab-overview']")
         time.sleep(1)
-        page.screenshot(path=os.path.join(output_dir, "01_dashboard_overview.png"))
+        path_overview = os.path.join(final_ui_dir, "overview-dashboard.png")
+        page.screenshot(path=path_overview)
+        page.screenshot(path=os.path.join(root_screenshots_dir, "01_dashboard_overview.png"))
+        print(f"Captured: {path_overview}")
 
-        page.click("button[data-tab='tab-orders']")
+        # 2. inventory-management.png
+        page.click("button[data-tab='tab-inventory']")
         time.sleep(1)
-        page.screenshot(path=os.path.join(output_dir, "02_order_saga_visualizer.png"))
+        path_inv = os.path.join(final_ui_dir, "inventory-management.png")
+        page.screenshot(path=path_inv)
+        print(f"Captured: {path_inv}")
 
+        # 3. atomic-reservations.png
         page.click("button[data-tab='tab-reservations']")
         time.sleep(1)
-        page.screenshot(path=os.path.join(output_dir, "03_atomic_reservations.png"))
+        path_res = os.path.join(final_ui_dir, "atomic-reservations.png")
+        page.screenshot(path=path_res)
+        page.screenshot(path=os.path.join(root_screenshots_dir, "03_atomic_reservations.png"))
+        print(f"Captured: {path_res}")
 
+        # 4. order-saga.png
+        page.click("button[data-tab='tab-orders']")
+        time.sleep(1)
+        path_saga = os.path.join(final_ui_dir, "order-saga.png")
+        page.screenshot(path=path_saga)
+        page.screenshot(path=os.path.join(root_screenshots_dir, "02_order_saga_visualizer.png"))
+        print(f"Captured: {path_saga}")
+
+        # 5. transactional-outbox.png
         page.click("button[data-tab='tab-events']")
         time.sleep(1)
-        page.screenshot(path=os.path.join(output_dir, "04_transactional_outbox.png"))
+        path_outbox = os.path.join(final_ui_dir, "transactional-outbox.png")
+        page.screenshot(path=path_outbox)
+        page.screenshot(path=os.path.join(root_screenshots_dir, "04_transactional_outbox.png"))
+        print(f"Captured: {path_outbox}")
 
+        # 6. system-health.png
+        page.click("button[data-tab='tab-health']")
+        time.sleep(1)
+        path_health = os.path.join(final_ui_dir, "system-health.png")
+        page.screenshot(path=path_health)
+        print(f"Captured: {path_health}")
+
+        # 7. mobile-dashboard.png
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.click("button[data-tab='tab-overview']")
+        time.sleep(1)
+        path_mobile = os.path.join(final_ui_dir, "mobile-dashboard.png")
+        page.screenshot(path=path_mobile)
+        print(f"Captured: {path_mobile}")
+
+        # Restore desktop viewport & capture swagger docs
+        page.set_viewport_size({"width": 1440, "height": 920})
         page.goto("http://127.0.0.1:8000/docs", wait_until="networkidle")
         time.sleep(2)
-        page.screenshot(path=os.path.join(output_dir, "05_swagger_api_docs.png"))
+        page.screenshot(path=os.path.join(root_screenshots_dir, "05_swagger_api_docs.png"))
 
         browser.close()
 

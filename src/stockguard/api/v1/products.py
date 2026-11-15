@@ -25,7 +25,7 @@ def create_product(req: ProductCreate, db: Session = Depends(get_db)):
 @router.get("", response_model=list[ProductResponse])
 def list_products(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 500,
     active_only: bool = True,
     db: Session = Depends(get_db)
 ):
