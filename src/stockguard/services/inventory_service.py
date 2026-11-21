@@ -30,12 +30,7 @@ class InventoryService:
         if existing:
             raise SkuAlreadyExistsException(f"Product with SKU '{req.sku}' already exists.")
 
-        product = Product(
-            sku=req.sku,
-            name=req.name,
-            description=req.description,
-            price=req.price
-        )
+        product = Product(sku=req.sku, name=req.name, description=req.description, price=req.price)
         db.add(product)
         db.flush()  # Obtain product.id
 
@@ -45,7 +40,7 @@ class InventoryService:
             available_stock=req.initial_stock,
             reserved_stock=0,
             allocated_stock=0,
-            low_stock_threshold=req.low_stock_threshold
+            low_stock_threshold=req.low_stock_threshold,
         )
         db.add(inventory)
 
@@ -60,8 +55,8 @@ class InventoryService:
                 "sku": product.sku,
                 "name": product.name,
                 "price": str(product.price),
-                "initial_stock": req.initial_stock
-            }
+                "initial_stock": req.initial_stock,
+            },
         )
 
         db.commit()
@@ -85,10 +80,7 @@ class InventoryService:
 
     @staticmethod
     def list_products(
-        db: Session,
-        skip: int = 0,
-        limit: int = 500,
-        active_only: bool = True
+        db: Session, skip: int = 0, limit: int = 500, active_only: bool = True
     ) -> list[Product]:
         query = select(Product)
         if active_only:
@@ -127,12 +119,13 @@ class InventoryService:
         return inv
 
     @staticmethod
-    def list_inventory(
-        db: Session,
-        skip: int = 0,
-        limit: int = 500
-    ) -> list[InventoryItem]:
-        query = select(InventoryItem).offset(skip).limit(limit).order_by(InventoryItem.created_at.desc())
+    def list_inventory(db: Session, skip: int = 0, limit: int = 500) -> list[InventoryItem]:
+        query = (
+            select(InventoryItem)
+            .offset(skip)
+            .limit(limit)
+            .order_by(InventoryItem.created_at.desc())
+        )
         return list(db.execute(query).scalars().all())
 
     @staticmethod
@@ -146,17 +139,14 @@ class InventoryService:
             # Atomic conditional update
             stmt = (
                 update(InventoryItem)
-                .where(
-                    InventoryItem.sku == req.sku,
-                    InventoryItem.available_stock >= abs_deduction
-                )
+                .where(InventoryItem.sku == req.sku, InventoryItem.available_stock >= abs_deduction)
                 .values(
                     available_stock=InventoryItem.available_stock + req.quantity_delta,
-                    version=InventoryItem.version + 1
+                    version=InventoryItem.version + 1,
                 )
             )
             result = db.execute(stmt)
-            if result.rowcount == 0:
+            if getattr(result, "rowcount", 0) == 0:
                 # Check if product exists
                 inv = db.execute(
                     select(InventoryItem).where(InventoryItem.sku == req.sku)
@@ -172,16 +162,14 @@ class InventoryService:
                 .where(InventoryItem.sku == req.sku)
                 .values(
                     available_stock=InventoryItem.available_stock + req.quantity_delta,
-                    version=InventoryItem.version + 1
+                    version=InventoryItem.version + 1,
                 )
             )
             result = db.execute(stmt)
-            if result.rowcount == 0:
+            if getattr(result, "rowcount", 0) == 0:
                 raise ProductNotFoundException(f"Inventory for SKU '{req.sku}' not found.")
 
-        inv = db.execute(
-            select(InventoryItem).where(InventoryItem.sku == req.sku)
-        ).scalar_one()
+        inv = db.execute(select(InventoryItem).where(InventoryItem.sku == req.sku)).scalar_one()
 
         OutboxService.create_message(
             db=db,
@@ -192,8 +180,8 @@ class InventoryService:
                 "sku": req.sku,
                 "quantity_delta": req.quantity_delta,
                 "reason": req.reason,
-                "new_available_stock": inv.available_stock
-            }
+                "new_available_stock": inv.available_stock,
+            },
         )
 
         db.commit()
@@ -203,6 +191,6 @@ class InventoryService:
             req.sku,
             req.quantity_delta,
             inv.available_stock,
-            req.reason
+            req.reason,
         )
         return inv

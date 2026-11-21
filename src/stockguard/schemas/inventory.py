@@ -4,8 +4,12 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class InventoryAdjustRequest(BaseModel):
     sku: str = Field(..., min_length=2, max_length=64, description="Product SKU to adjust")
-    quantity_delta: int = Field(..., description="Quantity delta (positive to restock, negative to deduct)")
-    reason: str = Field(..., min_length=3, max_length=255, description="Auditable adjustment reason")
+    quantity_delta: int = Field(
+        ..., description="Quantity delta (positive to restock, negative to deduct)"
+    )
+    reason: str = Field(
+        ..., min_length=3, max_length=255, description="Auditable adjustment reason"
+    )
 
 
 class InventoryResponse(BaseModel):

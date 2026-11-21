@@ -17,56 +17,29 @@ class ReservationStatus(str, Enum):
 class Reservation(Base, TimestampMixin):
     __tablename__ = "reservations"
 
-    id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     idempotency_key: Mapped[str] = mapped_column(
-        String(128),
-        unique=True,
-        index=True,
-        nullable=False
+        String(128), unique=True, index=True, nullable=False
     )
-    order_id: Mapped[str | None] = mapped_column(
-        String(36),
-        index=True,
-        nullable=True
-    )
+    order_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     product_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("products.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        String(36), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    sku: Mapped[str] = mapped_column(
-        String(64),
-        nullable=False,
-        index=True
-    )
-    quantity: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False
-    )
+    sku: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[ReservationStatus] = mapped_column(
         SQLEnum(ReservationStatus, native_enum=False, length=20),
         default=ReservationStatus.ACTIVE,
         nullable=False,
-        index=True
+        index=True,
     )
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        index=True
+        DateTime(timezone=True), nullable=False, index=True
     )
 
     # Relationships
     product = relationship(
-        "Product",
-        back_populates="reservations",
-        primaryjoin="Product.id == Reservation.product_id"
+        "Product", back_populates="reservations", primaryjoin="Product.id == Reservation.product_id"
     )
 
-    __table_args__ = (
-        CheckConstraint("quantity > 0", name="chk_reservation_quantity_positive"),
-    )
+    __table_args__ = (CheckConstraint("quantity > 0", name="chk_reservation_quantity_positive"),)

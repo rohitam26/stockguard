@@ -5,18 +5,14 @@ from stockguard.schemas.inventory import InventoryAdjustRequest, InventoryRespon
 from stockguard.services.inventory_service import (
     InventoryService,
     ProductNotFoundException,
-    InsufficientStockException
+    InsufficientStockException,
 )
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
 
 @router.get("", response_model=list[InventoryResponse])
-def list_inventory(
-    skip: int = 0,
-    limit: int = 500,
-    db: Session = Depends(get_db)
-):
+def list_inventory(skip: int = 0, limit: int = 500, db: Session = Depends(get_db)):
     return InventoryService.list_inventory(db, skip=skip, limit=limit)
 
 

@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from stockguard.api.v1.auth import router as auth_router
 from stockguard.api.v1.products import router as products_router
 from stockguard.api.v1.inventory import router as inventory_router
 from stockguard.api.v1.reservations import router as reservations_router
@@ -10,6 +11,7 @@ from stockguard.api.v1.outbox import router as outbox_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(health_router)
+api_v1_router.include_router(auth_router)
 api_v1_router.include_router(products_router)
 api_v1_router.include_router(inventory_router)
 api_v1_router.include_router(reservations_router)

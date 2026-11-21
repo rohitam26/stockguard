@@ -17,47 +17,27 @@ class FulfillmentStatus(str, Enum):
 class Fulfillment(Base, TimestampMixin):
     __tablename__ = "fulfillments"
 
-    id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     order_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("orders.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
-        index=True
+        index=True,
     )
     status: Mapped[FulfillmentStatus] = mapped_column(
         SQLEnum(FulfillmentStatus, native_enum=False, length=20),
         default=FulfillmentStatus.PENDING,
         nullable=False,
-        index=True
+        index=True,
     )
     tracking_number: Mapped[str | None] = mapped_column(
-        String(128),
-        unique=True,
-        index=True,
-        nullable=True
+        String(128), unique=True, index=True, nullable=True
     )
-    carrier: Mapped[str | None] = mapped_column(
-        String(64),
-        default="SIM_CARRIER",
-        nullable=True
-    )
-    shipped_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-    delivered_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-    notes: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True
-    )
+    carrier: Mapped[str | None] = mapped_column(String(64), default="SIM_CARRIER", nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationship
     order = relationship("Order", back_populates="fulfillment")

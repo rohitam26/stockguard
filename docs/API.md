@@ -1,140 +1,62 @@
-# StockGuard API Documentation
+# StockGuard API Specification
 
-Base URL: `/api/v1`  
-Interactive Swagger UI: `http://localhost:8000/docs`
-
----
-
-## 1. System Health
-
-### `GET /health`
-Returns system status, active database engine, masked connection string, and message broker connectivity.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2026-11-15T18:47:12.361Z",
-  "database": {
-    "status": "healthy",
-    "engine": "PostgreSQL",
-    "url_masked": "localhost:5432/stockguard"
-  },
-  "messaging": {
-    "broker": "In-Memory Event Bus (Fallback)",
-    "connected": false
-  },
-  "version": "1.0.0",
-  "environment": "development"
-}
-```
+**Base URL:** `/api/v1`<br>
+**Authentication:** `Authorization: Bearer <access_token>`
 
 ---
 
-## 2. Products Catalog
+## 1. Authentication & Identity (`/auth`)
 
-### `POST /products`
-Registers a new product and initializes its corresponding inventory record.
-
-**Request Body:**
-```json
-{
-  "sku": "LAPTOP-PRO-16",
-  "name": "MacBook Pro M3 16-inch 36GB",
-  "description": "High-performance developer workstation",
-  "price": 2499.00,
-  "initial_stock": 25,
-  "low_stock_threshold": 5
-}
-```
-
-### `GET /products`
-Lists products with optional pagination and active filters.
-
-### `GET /products/{product_id_or_sku}`
-Retrieves a single product by UUID or SKU.
+| Method | Endpoint | Description | Role / Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/register` | Register new user account | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/login` | Authenticate and obtain JWT access + refresh token | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/refresh` | Rotate refresh token and obtain new access token | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/revoke` | Revoke refresh token (logout) | Public |
+| `GET` | `/api/v1/auth/me` | Fetch authenticated user profile | Authenticated |
 
 ---
 
-## 3. Inventory Management
+## 2. Inventory & Catalog (`/products`, `/inventory`)
 
-### `GET /inventory`
-Lists all inventory records including available, reserved, allocated, and total units.
-
-### `GET /inventory/{sku}`
-Retrieves inventory breakdown for a specific SKU.
-
-### `POST /inventory/adjust`
-Applies an atomic inventory restock or deduction.
-
-**Request Body:**
-```json
-{
-  "sku": "LAPTOP-PRO-16",
-  "quantity_delta": 10,
-  "reason": "Warehouse batch intake"
-}
-```
+| Method | Endpoint | Description | Role / Auth |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/products` | List catalog products | Public |
+| `POST` | `/api/v1/products` | Create catalog SKU with initial stock | `INVENTORY_MANAGER`, `ADMIN` |
+| `GET` | `/api/v1/inventory` | List stock levels & low stock flags | Public |
+| `GET` | `/api/v1/inventory/{sku}` | Get inventory level for SKU | Public |
+| `POST` | `/api/v1/inventory/{sku}/adjust` | Atomic stock level adjustment (+/-) | `INVENTORY_MANAGER`, `ADMIN` |
 
 ---
 
-## 4. Atomic Reservations
+## 3. Reservations (`/reservations`)
 
-### `POST /reservations`
-Atomically reserves stock for a product. Guarantees idempotency.
-
-**Request Body:**
-```json
-{
-  "sku": "LAPTOP-PRO-16",
-  "quantity": 2,
-  "ttl_seconds": 600,
-  "idempotency_key": "idemp-client-req-987"
-}
-```
-
-### `POST /reservations/{reservation_id}/release`
-Explicitly cancels an active reservation and restores stock to available inventory.
-
-### `POST /reservations/expire-stale`
-Background sweep endpoint that releases expired reservations whose TTL has elapsed.
+| Method | Endpoint | Description | Role / Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/reservations` | Create atomic stock reservation (requires `idempotency_key`) | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/reservations` | List active reservations | Public / Filtered |
+| `GET` | `/api/v1/reservations/{id}` | Get reservation details | Public / Filtered |
+| `POST` | `/api/v1/reservations/{id}/release` | Manually release an active reservation | `CUSTOMER`, `ADMIN` |
+| `POST` | `/api/v1/reservations/expire-stale` | Trigger background sweep of expired reservations | `ADMIN` |
 
 ---
 
-## 5. Orders & Distributed Saga
+## 4. Orders & Distributed Saga (`/orders`)
 
-### `POST /orders`
-Creates a customer order in `PENDING` status.
-
-**Request Body:**
-```json
-{
-  "customer_id": "cust-techcorp",
-  "items": [
-    {"sku": "KEYBOARD-MECH", "quantity": 2},
-    {"sku": "MOUSE-PRECISION", "quantity": 2}
-  ],
-  "idempotency_key": "order-req-202"
-}
-```
-
-### `POST /orders/{order_id}/checkout`
-Executes the Distributed Saga Orchestrator:
-- Reserves all items atomically.
-- Simulates payment.
-- Triggers automatic backward compensation if payment is declined.
-- Allocates stock and initiates fulfillment on success.
-
-**Parameters:**
-- `payment_method` (string, default: `CREDIT_CARD`)
-- `simulate_failure` (boolean, default: `false`)
+| Method | Endpoint | Description | Role / Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/orders` | Create order with items in PENDING state | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/orders` | List orders | Public / Filtered |
+| `GET` | `/api/v1/orders/{id}` | Get order details (IDOR protected for customers) | `CUSTOMER` (owner), `ADMIN` |
+| `POST` | `/api/v1/orders/{id}/checkout` | Execute multi-step checkout Saga with compensation | `CUSTOMER`, `ADMIN` |
 
 ---
 
-## 6. Transactional Outbox
+## 5. Health, Probes & Observability (`/health`, `/metrics`)
 
-### `GET /outbox`
-Lists staged outbox events, status (`PENDING` or `PUBLISHED`), and retry counts.
-
-### `POST /outbox/process`
-Triggers the Outbox Worker to publish pending messages to the message broker.
+| Method | Endpoint | Description | Role / Auth |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/health` | Comprehensive system health & topology | Public |
+| `GET` | `/api/v1/health/live` | Kubernetes liveness probe (200 OK) | Public |
+| `GET` | `/api/v1/health/ready` | Kubernetes readiness probe (PostgreSQL check) | Public |
+| `GET` | `/metrics` | Prometheus text exposition metrics | Public |

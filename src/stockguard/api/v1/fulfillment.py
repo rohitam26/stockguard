@@ -10,9 +10,7 @@ router = APIRouter(prefix="/fulfillment", tags=["Fulfillment"])
 
 @router.post("/order/{order_id}", response_model=FulfillmentResponse)
 def initiate_fulfillment(
-    order_id: str,
-    req: FulfillmentProcessRequest | None = None,
-    db: Session = Depends(get_db)
+    order_id: str, req: FulfillmentProcessRequest | None = None, db: Session = Depends(get_db)
 ):
     try:
         return FulfillmentService.initiate_fulfillment(db, order_id, req)

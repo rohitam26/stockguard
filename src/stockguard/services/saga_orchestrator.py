@@ -1,13 +1,10 @@
 import logging
 from typing import Any
-from sqlalchemy import select
 from sqlalchemy.orm import Session
-from stockguard.models.order import Order, OrderStatus
-from stockguard.models.reservation import Reservation, ReservationStatus
+from stockguard.models.order import OrderStatus
 from stockguard.models.payment import PaymentStatus
 from stockguard.schemas.reservation import ReservationCreateRequest
 from stockguard.schemas.payment import PaymentProcessRequest
-from stockguard.schemas.fulfillment import FulfillmentProcessRequest
 from stockguard.services.order_service import OrderService
 from stockguard.services.reservation_service import ReservationService
 from stockguard.services.payment_service import PaymentService
@@ -27,7 +24,7 @@ class SagaExecutionResult:
         reservations: list[str] | None = None,
         payment_status: str | None = None,
         fulfillment_status: str | None = None,
-        compensated: bool = False
+        compensated: bool = False,
     ):
         self.order_id = order_id
         self.success = success
@@ -47,7 +44,7 @@ class SagaExecutionResult:
             "reservations": self.reservations,
             "payment_status": self.payment_status,
             "fulfillment_status": self.fulfillment_status,
-            "compensated": self.compensated
+            "compensated": self.compensated,
         }
 
 
@@ -57,7 +54,7 @@ class SagaOrchestrator:
         db: Session,
         order_id: str,
         payment_method: str = "CREDIT_CARD",
-        simulate_payment_failure: bool = False
+        simulate_payment_failure: bool = False,
     ) -> SagaExecutionResult:
         """
         Executes the Order Checkout Distributed Saga with automated compensation.
@@ -67,7 +64,31 @@ class SagaOrchestrator:
         3. Confirm Reservations & Initiate Fulfillment
         """
         order = OrderService.get_order(db, order_id)
-        logger.info("Starting Saga for order %s (amount: %s)", order.order_number, order.total_amount)
+        logger.info(
+            "Starting Saga for order %s (amount: %s)", order.order_number, order.total_amount
+        )
+
+        # Idempotency: If order has already reached terminal completion or cancellation, return existing state
+        if order.status == OrderStatus.COMPLETED:
+            logger.info("Saga checkout idempotent hit: order %s already completed.", order_id)
+            return SagaExecutionResult(
+                order_id=order_id,
+                success=True,
+                stage="COMPLETED",
+                message="Order already completed (idempotent duplicate request)",
+                compensated=False,
+            )
+        if order.status in (OrderStatus.CANCELLED, OrderStatus.FAILED):
+            logger.info(
+                "Saga checkout idempotent hit: order %s already cancelled/failed.", order_id
+            )
+            return SagaExecutionResult(
+                order_id=order_id,
+                success=False,
+                stage="FAILED",
+                message=f"Order already in terminal state: {order.status.value}",
+                compensated=True,
+            )
 
         # -----------------------------------------------------------------
         # STEP 1: INVENTORY RESERVATION
@@ -83,17 +104,22 @@ class SagaOrchestrator:
                     quantity=item.quantity,
                     order_id=order.id,
                     ttl_seconds=600,
-                    idempotency_key=res_key
+                    idempotency_key=res_key,
                 )
                 res = ReservationService.create_reservation(db, req)
                 acquired_reservation_ids.append(res.id)
 
         except InsufficientStockException as e:
-            logger.warning("Saga step 1 failed: Insufficient stock. Compensating acquired reservations. Error: %s", e)
+            logger.warning(
+                "Saga step 1 failed: Insufficient stock. Compensating acquired reservations. Error: %s",
+                e,
+            )
             # COMPENSATING ACTION: Release any reservations acquired in earlier iterations
             for r_id in acquired_reservation_ids:
                 try:
-                    ReservationService.release_reservation(db, r_id, reason="Saga compensation: partial reservation failure")
+                    ReservationService.release_reservation(
+                        db, r_id, reason="Saga compensation: partial reservation failure"
+                    )
                 except Exception as comp_err:
                     logger.error("Error compensating reservation %s: %s", r_id, comp_err)
 
@@ -106,20 +132,24 @@ class SagaOrchestrator:
                 stage="RESERVATION",
                 message=str(e),
                 reservations=acquired_reservation_ids,
-                compensated=True
+                compensated=True,
             )
 
         except Exception as e:
             logger.error("Unexpected error in Saga reservation step: %s", e)
             for r_id in acquired_reservation_ids:
-                ReservationService.release_reservation(db, r_id, reason="Saga compensation: unexpected error")
-            OrderService.update_order_status(db, order_id, OrderStatus.FAILED, failure_reason=str(e))
+                ReservationService.release_reservation(
+                    db, r_id, reason="Saga compensation: unexpected error"
+                )
+            OrderService.update_order_status(
+                db, order_id, OrderStatus.FAILED, failure_reason=str(e)
+            )
             return SagaExecutionResult(
                 order_id=order_id,
                 success=False,
                 stage="RESERVATION",
                 message=f"Reservation failed: {e}",
-                compensated=True
+                compensated=True,
             )
 
         OrderService.update_order_status(db, order_id, OrderStatus.RESERVED)
@@ -131,26 +161,33 @@ class SagaOrchestrator:
         payment_req = PaymentProcessRequest(
             order_id=order.id,
             payment_method=payment_method,
-            simulate_failure=simulate_payment_failure
+            simulate_failure=simulate_payment_failure,
         )
         payment = PaymentService.process_payment(db, payment_req)
 
         if payment.status != PaymentStatus.SUCCESS:
             logger.warning(
                 "Saga step 2 failed: Payment unsuccessful (%s). Triggering SAGA COMPENSATION.",
-                payment.failure_reason
+                payment.failure_reason,
             )
             # COMPENSATING ACTION: Release ALL reservations acquired for this order
             for r_id in acquired_reservation_ids:
                 try:
                     ReservationService.release_reservation(
-                        db, r_id, reason=f"Saga compensation: payment failed ({payment.failure_reason})"
+                        db,
+                        r_id,
+                        reason=f"Saga compensation: payment failed ({payment.failure_reason})",
                     )
                 except Exception as comp_err:
-                    logger.error("Error during payment compensation for reservation %s: %s", r_id, comp_err)
+                    logger.error(
+                        "Error during payment compensation for reservation %s: %s", r_id, comp_err
+                    )
 
             OrderService.update_order_status(
-                db, order_id, OrderStatus.CANCELLED, failure_reason=f"Payment declined: {payment.failure_reason}"
+                db,
+                order_id,
+                OrderStatus.CANCELLED,
+                failure_reason=f"Payment declined: {payment.failure_reason}",
             )
             return SagaExecutionResult(
                 order_id=order_id,
@@ -159,7 +196,7 @@ class SagaOrchestrator:
                 message=f"Payment declined: {payment.failure_reason}",
                 reservations=acquired_reservation_ids,
                 payment_status=payment.status.value,
-                compensated=True
+                compensated=True,
             )
 
         OrderService.update_order_status(db, order_id, OrderStatus.PAID)
@@ -177,7 +214,7 @@ class SagaOrchestrator:
         logger.info(
             "Saga completed successfully for order %s. Tracking: %s",
             order.order_number,
-            fulfillment.tracking_number
+            fulfillment.tracking_number,
         )
         return SagaExecutionResult(
             order_id=order_id,
@@ -187,5 +224,5 @@ class SagaOrchestrator:
             reservations=acquired_reservation_ids,
             payment_status=payment.status.value,
             fulfillment_status=fulfillment.status.value,
-            compensated=False
+            compensated=False,
         )

@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Callable, Any
 from datetime import datetime, timezone
@@ -14,6 +13,7 @@ class EventBus:
     Unified Event Bus abstraction supporting broker decoupling.
     Provides consumer idempotency tracking and dead-letter routing.
     """
+
     def __init__(self):
         self._handlers: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
         self._dead_letter_queue: list[dict[str, Any]] = []
@@ -35,11 +35,7 @@ class EventBus:
         return existing is not None
 
     def mark_event_processed(
-        self,
-        db: Session,
-        message_id: str,
-        consumer_name: str,
-        event_type: str
+        self, db: Session, message_id: str, consumer_name: str, event_type: str
     ):
         """
         Record processed event to guarantee idempotent consumer execution.
@@ -49,7 +45,7 @@ class EventBus:
             id=record_id,
             consumer_name=consumer_name,
             event_type=event_type,
-            processed_at=datetime.now(timezone.utc)
+            processed_at=datetime.now(timezone.utc),
         )
         db.add(processed)
         db.commit()
@@ -60,7 +56,7 @@ class EventBus:
         payload: dict[str, Any],
         message_id: str,
         headers: dict[str, Any] | None = None,
-        max_retries: int = 3
+        max_retries: int = 3,
     ) -> bool:
         """
         Publishes event to registered local subscribers with retry and DLQ routing.
@@ -76,7 +72,7 @@ class EventBus:
             "event_type": event_type,
             "payload": payload,
             "headers": headers or {},
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         all_ok = True
@@ -90,15 +86,21 @@ class EventBus:
                 except Exception as e:
                     logger.warning(
                         "Handler %s failed on event %s (attempt %d/%d): %s",
-                        handler.__name__, event_type, attempt, max_retries, e
+                        handler.__name__,
+                        event_type,
+                        attempt,
+                        max_retries,
+                        e,
                     )
             if not success:
                 logger.error("Handler %s exhausted retries. Routing to DLQ.", handler.__name__)
-                self._dead_letter_queue.append({
-                    "envelope": message_envelope,
-                    "handler": handler.__name__,
-                    "failed_at": datetime.now(timezone.utc).isoformat()
-                })
+                self._dead_letter_queue.append(
+                    {
+                        "envelope": message_envelope,
+                        "handler": handler.__name__,
+                        "failed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
                 all_ok = False
 
         return all_ok

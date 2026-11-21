@@ -7,56 +7,30 @@ from stockguard.models.base import Base, TimestampMixin
 class InventoryItem(Base, TimestampMixin):
     __tablename__ = "inventory_items"
 
-    id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     product_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("products.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
-        index=True
+        index=True,
     )
     sku: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("products.sku", ondelete="CASCADE"),
         unique=True,
         nullable=False,
-        index=True
+        index=True,
     )
-    available_stock: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False
-    )
-    reserved_stock: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False
-    )
-    allocated_stock: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False
-    )
-    low_stock_threshold: Mapped[int] = mapped_column(
-        Integer,
-        default=10,
-        nullable=False
-    )
-    version: Mapped[int] = mapped_column(
-        Integer,
-        default=1,
-        nullable=False
-    )
+    available_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reserved_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    allocated_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Explicit primaryjoin
     product = relationship(
-        "Product",
-        back_populates="inventory",
-        primaryjoin="Product.id == InventoryItem.product_id"
+        "Product", back_populates="inventory", primaryjoin="Product.id == InventoryItem.product_id"
     )
 
     __table_args__ = (

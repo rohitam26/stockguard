@@ -20,5 +20,7 @@ def process_payment(req: PaymentProcessRequest, db: Session = Depends(get_db)):
 def get_payment_for_order(order_id: str, db: Session = Depends(get_db)):
     payment = PaymentService.get_payment_by_order(db, order_id)
     if not payment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment record not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment record not found."
+        )
     return payment

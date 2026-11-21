@@ -10,7 +10,7 @@ from stockguard.schemas.reservation import ReservationCreateRequest
 from stockguard.services.outbox_service import OutboxService
 from stockguard.services.inventory_service import (
     ProductNotFoundException,
-    InsufficientStockException
+    InsufficientStockException,
 )
 
 logger = logging.getLogger("stockguard.reservation_service")
@@ -51,19 +51,16 @@ class ReservationService:
         # Rowcount will be 0 if available_stock < req.quantity, completely preventing race condition overselling!
         stmt = (
             update(InventoryItem)
-            .where(
-                InventoryItem.sku == req.sku,
-                InventoryItem.available_stock >= req.quantity
-            )
+            .where(InventoryItem.sku == req.sku, InventoryItem.available_stock >= req.quantity)
             .values(
                 available_stock=InventoryItem.available_stock - req.quantity,
                 reserved_stock=InventoryItem.reserved_stock + req.quantity,
-                version=InventoryItem.version + 1
+                version=InventoryItem.version + 1,
             )
         )
         result = db.execute(stmt)
 
-        if result.rowcount == 0:
+        if getattr(result, "rowcount", 0) == 0:
             # Query current stock to furnish detailed error message
             curr_inv = db.execute(
                 select(InventoryItem).where(InventoryItem.sku == req.sku)
@@ -83,7 +80,7 @@ class ReservationService:
             sku=req.sku,
             quantity=req.quantity,
             status=ReservationStatus.ACTIVE,
-            expires_at=expires_at
+            expires_at=expires_at,
         )
         db.add(reservation)
         db.flush()
@@ -100,8 +97,8 @@ class ReservationService:
                 "order_id": reservation.order_id,
                 "sku": reservation.sku,
                 "quantity": reservation.quantity,
-                "expires_at": reservation.expires_at.isoformat()
-            }
+                "expires_at": reservation.expires_at.isoformat(),
+            },
         )
 
         db.commit()
@@ -111,16 +108,13 @@ class ReservationService:
             reservation.id,
             reservation.quantity,
             reservation.sku,
-            reservation.expires_at
+            reservation.expires_at,
         )
         return reservation
 
     @staticmethod
     def list_reservations(
-        db: Session,
-        skip: int = 0,
-        limit: int = 100,
-        status: ReservationStatus | None = None
+        db: Session, skip: int = 0, limit: int = 100, status: ReservationStatus | None = None
     ) -> list[Reservation]:
         query = select(Reservation)
         if status is not None:
@@ -138,7 +132,9 @@ class ReservationService:
         return res
 
     @staticmethod
-    def release_reservation(db: Session, reservation_id: str, reason: str = "Explicit release") -> Reservation:
+    def release_reservation(
+        db: Session, reservation_id: str, reason: str = "Explicit release"
+    ) -> Reservation:
         """
         Releases an active reservation and restores available stock.
         """
@@ -155,7 +151,7 @@ class ReservationService:
             .values(
                 available_stock=InventoryItem.available_stock + res.quantity,
                 reserved_stock=InventoryItem.reserved_stock - res.quantity,
-                version=InventoryItem.version + 1
+                version=InventoryItem.version + 1,
             )
         )
         db.execute(stmt)
@@ -171,8 +167,8 @@ class ReservationService:
                 "reservation_id": res.id,
                 "sku": res.sku,
                 "quantity": res.quantity,
-                "reason": reason
-            }
+                "reason": reason,
+            },
         )
 
         db.commit()
@@ -197,7 +193,7 @@ class ReservationService:
             .values(
                 reserved_stock=InventoryItem.reserved_stock - res.quantity,
                 allocated_stock=InventoryItem.allocated_stock + res.quantity,
-                version=InventoryItem.version + 1
+                version=InventoryItem.version + 1,
             )
         )
         db.execute(stmt)
@@ -209,16 +205,14 @@ class ReservationService:
             event_type="reservation.confirmed",
             aggregate_type="reservation",
             aggregate_id=res.id,
-            payload={
-                "reservation_id": res.id,
-                "sku": res.sku,
-                "quantity": res.quantity
-            }
+            payload={"reservation_id": res.id, "sku": res.sku, "quantity": res.quantity},
         )
 
         db.commit()
         db.refresh(res)
-        logger.info("Confirmed reservation %s for SKU %s (allocated %d)", res.id, res.sku, res.quantity)
+        logger.info(
+            "Confirmed reservation %s for SKU %s (allocated %d)", res.id, res.sku, res.quantity
+        )
         return res
 
     @staticmethod
@@ -227,12 +221,15 @@ class ReservationService:
         Background cleaner: Scans and expires all ACTIVE reservations past their expiration timestamp.
         """
         now = utc_now()
-        stale_reservations = list(db.execute(
-            select(Reservation).where(
-                Reservation.status == ReservationStatus.ACTIVE,
-                Reservation.expires_at <= now
+        stale_reservations = list(
+            db.execute(
+                select(Reservation).where(
+                    Reservation.status == ReservationStatus.ACTIVE, Reservation.expires_at <= now
+                )
             )
-        ).scalars().all())
+            .scalars()
+            .all()
+        )
 
         count = 0
         for res in stale_reservations:
@@ -244,7 +241,7 @@ class ReservationService:
                     .values(
                         available_stock=InventoryItem.available_stock + res.quantity,
                         reserved_stock=InventoryItem.reserved_stock - res.quantity,
-                        version=InventoryItem.version + 1
+                        version=InventoryItem.version + 1,
                     )
                 )
                 db.execute(stmt)
@@ -259,8 +256,8 @@ class ReservationService:
                         "reservation_id": res.id,
                         "sku": res.sku,
                         "quantity": res.quantity,
-                        "expired_at": now.isoformat()
-                    }
+                        "expired_at": now.isoformat(),
+                    },
                 )
                 count += 1
             except Exception as e:

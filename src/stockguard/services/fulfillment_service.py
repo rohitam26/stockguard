@@ -18,17 +18,25 @@ class FulfillmentNotFoundException(Exception):
 
 class FulfillmentService:
     @staticmethod
-    def initiate_fulfillment(db: Session, order_id: str, req: FulfillmentProcessRequest | None = None) -> Fulfillment:
+    def initiate_fulfillment(
+        db: Session, order_id: str, req: FulfillmentProcessRequest | None = None
+    ) -> Fulfillment:
         order = db.execute(select(Order).where(Order.id == order_id)).scalar_one_or_none()
         if not order:
             raise OrderNotFoundException(f"Order '{order_id}' not found.")
 
-        existing = db.execute(select(Fulfillment).where(Fulfillment.order_id == order_id)).scalar_one_or_none()
+        existing = db.execute(
+            select(Fulfillment).where(Fulfillment.order_id == order_id)
+        ).scalar_one_or_none()
         if existing:
             return existing
 
         carrier = req.carrier if req and req.carrier else "FAST_SHIP"
-        tracking = req.tracking_number if req and req.tracking_number else f"TRK-{uuid.uuid4().hex[:10].upper()}"
+        tracking = (
+            req.tracking_number
+            if req and req.tracking_number
+            else f"TRK-{uuid.uuid4().hex[:10].upper()}"
+        )
         notes = req.notes if req else None
 
         fulfillment = Fulfillment(
@@ -36,7 +44,7 @@ class FulfillmentService:
             status=FulfillmentStatus.PACKING,
             tracking_number=tracking,
             carrier=carrier,
-            notes=notes
+            notes=notes,
         )
         db.add(fulfillment)
         db.flush()  # Crucial: populate fulfillment.id
@@ -51,8 +59,8 @@ class FulfillmentService:
                 "order_id": order_id,
                 "carrier": carrier,
                 "tracking_number": tracking,
-                "status": fulfillment.status.value
-            }
+                "status": fulfillment.status.value,
+            },
         )
 
         db.commit()
@@ -62,7 +70,9 @@ class FulfillmentService:
 
     @staticmethod
     def update_status(db: Session, order_id: str, status: FulfillmentStatus) -> Fulfillment:
-        fulfillment = db.execute(select(Fulfillment).where(Fulfillment.order_id == order_id)).scalar_one_or_none()
+        fulfillment = db.execute(
+            select(Fulfillment).where(Fulfillment.order_id == order_id)
+        ).scalar_one_or_none()
         if not fulfillment:
             raise FulfillmentNotFoundException(f"Fulfillment for order '{order_id}' not found.")
 
@@ -82,8 +92,8 @@ class FulfillmentService:
                 "fulfillment_id": fulfillment.id,
                 "order_id": order_id,
                 "status": status.value,
-                "updated_at": now.isoformat()
-            }
+                "updated_at": now.isoformat(),
+            },
         )
 
         db.commit()
@@ -92,4 +102,6 @@ class FulfillmentService:
 
     @staticmethod
     def get_fulfillment_by_order(db: Session, order_id: str) -> Fulfillment | None:
-        return db.execute(select(Fulfillment).where(Fulfillment.order_id == order_id)).scalar_one_or_none()
+        return db.execute(
+            select(Fulfillment).where(Fulfillment.order_id == order_id)
+        ).scalar_one_or_none()

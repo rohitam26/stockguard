@@ -7,6 +7,7 @@ from stockguard.models.payment import Payment, PaymentStatus
 from stockguard.models.fulfillment import Fulfillment, FulfillmentStatus
 from stockguard.models.outbox import OutboxMessage, OutboxStatus
 from stockguard.models.event import ProcessedEvent
+from stockguard.models.user import User, UserRole, RefreshToken
 
 __all__ = [
     "Base",
@@ -26,6 +27,9 @@ __all__ = [
     "OutboxMessage",
     "OutboxStatus",
     "ProcessedEvent",
+    "User",
+    "UserRole",
+    "RefreshToken",
 ]
 
 

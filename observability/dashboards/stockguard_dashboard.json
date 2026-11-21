@@ -1,0 +1,63 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "HTTP Request Throughput (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(stockguard_http_requests_total[1m])) by (status)",
+          "legendFormat": "Status {{status}}"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Request Latency (P50 / P95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "stockguard_http_request_duration_seconds{quantile=\"0.5\"}",
+          "legendFormat": "P50 {{path}}"
+        },
+        {
+          "expr": "stockguard_http_request_duration_seconds{quantile=\"0.95\"}",
+          "legendFormat": "P95 {{path}}"
+        }
+      ]
+    },
+    {
+      "title": "Inventory Reservation Outcomes",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(stockguard_reservations_total[1m])) by (outcome)",
+          "legendFormat": "Outcome: {{outcome}}"
+        }
+      ]
+    },
+    {
+      "title": "Transactional Outbox Backlog",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "stockguard_outbox_backlog_total",
+          "legendFormat": "Pending Outbox Messages"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "title": "StockGuard Reliability & Performance Dashboard",
+  "uid": "stockguard-reliability"
+}

@@ -7,7 +7,9 @@ from stockguard.models.payment import PaymentStatus
 class PaymentProcessRequest(BaseModel):
     order_id: str = Field(..., description="Target order ID")
     payment_method: str = Field(default="CREDIT_CARD", max_length=64)
-    simulate_failure: bool = Field(default=False, description="Simulate payment failure for testing")
+    simulate_failure: bool = Field(
+        default=False, description="Simulate payment failure for testing"
+    )
     failure_reason: str | None = Field(default=None, max_length=255)
 
 

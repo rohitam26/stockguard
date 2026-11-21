@@ -3,7 +3,6 @@ import logging
 import threading
 from typing import Callable, Any
 import pika
-from pika.exceptions import AMQPError
 from stockguard.config import get_settings
 from stockguard.database import get_session_factory
 from stockguard.models.event import ProcessedEvent
@@ -27,7 +26,7 @@ class RabbitMQConsumerWorker:
         self,
         queue_name: str,
         consumer_name: str | None = None,
-        handler: Callable[[str, dict[str, Any], dict[str, Any]], bool] | None = None
+        handler: Callable[[str, dict[str, Any], dict[str, Any]], bool] | None = None,
     ):
         self.queue_name = queue_name
         self.consumer_name = consumer_name or f"{queue_name}.worker"
@@ -55,12 +54,14 @@ class RabbitMQConsumerWorker:
             logger.warning("RabbitMQConsumerWorker could not connect (%s)", e)
             return False
 
-    def _default_handler(self, routing_key: str, payload: dict[str, Any], headers: dict[str, Any]) -> bool:
+    def _default_handler(
+        self, routing_key: str, payload: dict[str, Any], headers: dict[str, Any]
+    ) -> bool:
         logger.info(
             "[%s] Received event '%s': %s",
             self.consumer_name,
             routing_key,
-            json.dumps(payload, default=str)[:200]
+            json.dumps(payload, default=str)[:200],
         )
         return True
 
@@ -69,7 +70,7 @@ class RabbitMQConsumerWorker:
         ch: pika.adapters.blocking_connection.BlockingChannel,
         method: pika.spec.Basic.Deliver,
         properties: pika.spec.BasicProperties,
-        body: bytes
+        body: bytes,
     ):
         message_id = properties.message_id or (properties.headers or {}).get("message_id")
         if not message_id:
@@ -85,7 +86,7 @@ class RabbitMQConsumerWorker:
                 logger.info(
                     "[%s] Event %s already processed. Acknowledging duplicate.",
                     self.consumer_name,
-                    event_key
+                    event_key,
                 )
                 ch.basic_ack(delivery_tag=method.delivery_tag)
                 return
@@ -94,7 +95,9 @@ class RabbitMQConsumerWorker:
         try:
             payload = json.loads(body.decode("utf-8"))
         except Exception as e:
-            logger.error("[%s] Malformed JSON payload (%s). Rejecting to DLQ.", self.consumer_name, e)
+            logger.error(
+                "[%s] Malformed JSON payload (%s). Rejecting to DLQ.", self.consumer_name, e
+            )
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
@@ -108,13 +111,17 @@ class RabbitMQConsumerWorker:
                     processed_record = ProcessedEvent(
                         id=event_key,
                         consumer_name=self.consumer_name,
-                        event_type=method.routing_key
+                        event_type=method.routing_key,
                     )
                     db.add(processed_record)
                     db.commit()
 
                 ch.basic_ack(delivery_tag=method.delivery_tag)
-                logger.debug("[%s] Successfully processed & acknowledged event %s", self.consumer_name, message_id)
+                logger.debug(
+                    "[%s] Successfully processed & acknowledged event %s",
+                    self.consumer_name,
+                    message_id,
+                )
             else:
                 raise RuntimeError("Handler returned failure status")
         except Exception as e:
@@ -122,7 +129,7 @@ class RabbitMQConsumerWorker:
                 "[%s] Error processing event %s (%s). Routing to Dead-Letter Queue.",
                 self.consumer_name,
                 message_id,
-                e
+                e,
             )
             # Requeue=False routes to x-dead-letter-exchange (stockguard.dlq)
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
@@ -134,9 +141,7 @@ class RabbitMQConsumerWorker:
 
         self._is_running = True
         self._channel.basic_consume(
-            queue=self.queue_name,
-            on_message_callback=self.process_delivery,
-            auto_ack=False
+            queue=self.queue_name, on_message_callback=self.process_delivery, auto_ack=False
         )
         logger.info("[%s] Started consuming from %s...", self.consumer_name, self.queue_name)
         try:
@@ -148,9 +153,7 @@ class RabbitMQConsumerWorker:
 
     def start_in_thread(self) -> threading.Thread:
         self._thread = threading.Thread(
-            target=self.start_consuming,
-            name=f"ConsumerThread-{self.queue_name}",
-            daemon=True
+            target=self.start_consuming, name=f"ConsumerThread-{self.queue_name}", daemon=True
         )
         self._thread.start()
         return self._thread

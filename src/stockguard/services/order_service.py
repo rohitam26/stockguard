@@ -46,7 +46,9 @@ class OrderService:
                 select(Product).where(Product.sku == item_req.sku, Product.is_active.is_(True))
             ).scalar_one_or_none()
             if not product:
-                raise ProductNotFoundException(f"Active product with SKU '{item_req.sku}' not found.")
+                raise ProductNotFoundException(
+                    f"Active product with SKU '{item_req.sku}' not found."
+                )
 
             subtotal = product.price * item_req.quantity
             total_amount += subtotal
@@ -56,7 +58,7 @@ class OrderService:
                 product_id=product.id,
                 sku=product.sku,
                 quantity=item_req.quantity,
-                unit_price=product.price
+                unit_price=product.price,
             )
             order_items.append(order_item)
 
@@ -67,7 +69,7 @@ class OrderService:
             status=OrderStatus.PENDING,
             total_amount=total_amount,
             currency=req.currency,
-            idempotency_key=req.idempotency_key
+            idempotency_key=req.idempotency_key,
         )
         db.add(order)
         db.flush()
@@ -89,13 +91,18 @@ class OrderService:
                 "items": [
                     {"sku": oi.sku, "quantity": oi.quantity, "unit_price": str(oi.unit_price)}
                     for oi in order_items
-                ]
-            }
+                ],
+            },
         )
 
         db.commit()
         db.refresh(order)
-        logger.info("Created order %s (total: %s %s)", order.order_number, order.total_amount, order.currency)
+        logger.info(
+            "Created order %s (total: %s %s)",
+            order.order_number,
+            order.total_amount,
+            order.currency,
+        )
         return order
 
     @staticmethod
@@ -112,10 +119,7 @@ class OrderService:
 
     @staticmethod
     def update_order_status(
-        db: Session,
-        order_id: str,
-        new_status: OrderStatus,
-        failure_reason: str | None = None
+        db: Session, order_id: str, new_status: OrderStatus, failure_reason: str | None = None
     ) -> Order:
         order = OrderService.get_order(db, order_id)
         order.status = new_status
@@ -124,14 +128,14 @@ class OrderService:
 
         OutboxService.create_message(
             db=db,
-            event_type=f"order.status_changed",
+            event_type="order.status_changed",
             aggregate_type="order",
             aggregate_id=order.id,
             payload={
                 "order_id": order.id,
                 "new_status": new_status.value,
-                "failure_reason": failure_reason
-            }
+                "failure_reason": failure_reason,
+            },
         )
 
         db.commit()

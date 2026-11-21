@@ -7,8 +7,12 @@ class ReservationCreateRequest(BaseModel):
     sku: str = Field(..., min_length=2, max_length=64, description="Product SKU")
     quantity: int = Field(..., gt=0, description="Quantity to reserve (must be > 0)")
     order_id: str | None = Field(default=None, description="Associated order ID if any")
-    ttl_seconds: int = Field(default=600, gt=0, le=86400, description="TTL in seconds (default 10 minutes)")
-    idempotency_key: str = Field(..., min_length=8, max_length=128, description="Unique client key for idempotency")
+    ttl_seconds: int = Field(
+        default=600, gt=0, le=86400, description="TTL in seconds (default 10 minutes)"
+    )
+    idempotency_key: str = Field(
+        ..., min_length=8, max_length=128, description="Unique client key for idempotency"
+    )
 
 
 class ReservationReleaseRequest(BaseModel):

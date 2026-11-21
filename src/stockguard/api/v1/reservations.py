@@ -4,16 +4,16 @@ from stockguard.database import get_db
 from stockguard.schemas.reservation import (
     ReservationCreateRequest,
     ReservationReleaseRequest,
-    ReservationResponse
+    ReservationResponse,
 )
 from stockguard.services.reservation_service import (
     ReservationService,
     ReservationNotFoundException,
-    InvalidReservationStateException
+    InvalidReservationStateException,
 )
 from stockguard.services.inventory_service import (
     ProductNotFoundException,
-    InsufficientStockException
+    InsufficientStockException,
 )
 
 router = APIRouter(prefix="/reservations", tags=["Reservations"])
@@ -30,11 +30,7 @@ def create_reservation(req: ReservationCreateRequest, db: Session = Depends(get_
 
 
 @router.get("", response_model=list[ReservationResponse])
-def list_reservations(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
+def list_reservations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return ReservationService.list_reservations(db, skip=skip, limit=limit)
 
 
@@ -50,7 +46,7 @@ def get_reservation(reservation_id: str, db: Session = Depends(get_db)):
 def release_reservation(
     reservation_id: str,
     req: ReservationReleaseRequest = ReservationReleaseRequest(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     try:
         return ReservationService.release_reservation(db, reservation_id, reason=req.reason)

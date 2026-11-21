@@ -26,7 +26,7 @@ def get_engine() -> Engine:
                 pool_size=settings.DB_POOL_SIZE,
                 max_overflow=settings.DB_MAX_OVERFLOW,
                 echo=settings.DB_ECHO,
-                connect_args={"connect_timeout": 3}
+                connect_args={"connect_timeout": 3},
             )
             # Verify connectivity
             with test_engine.connect() as conn:
@@ -40,7 +40,7 @@ def get_engine() -> Engine:
             "Primary database (%s) unavailable (%s). Falling back to %s",
             target_url.split("@")[-1] if "@" in target_url else target_url,
             e,
-            settings.FALLBACK_DATABASE_URL
+            settings.FALLBACK_DATABASE_URL,
         )
 
     # Fallback to SQLite (or test database)
@@ -49,11 +49,7 @@ def get_engine() -> Engine:
     if "sqlite" in _active_db_url:
         connect_args = {"check_same_thread": False}
 
-    _engine = create_engine(
-        _active_db_url,
-        echo=settings.DB_ECHO,
-        connect_args=connect_args
-    )
+    _engine = create_engine(_active_db_url, echo=settings.DB_ECHO, connect_args=connect_args)
 
     if "sqlite" in _active_db_url:
         # Enable foreign keys and WAL mode for SQLite

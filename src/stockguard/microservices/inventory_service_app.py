@@ -2,6 +2,7 @@
 Independent entrypoint for StockGuard Inventory Microservice.
 Can be executed as: uvicorn stockguard.microservices.inventory_service_app:app --port 8001
 """
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from stockguard.api.v1.inventory import router as inventory_router
@@ -12,7 +13,7 @@ from stockguard.api.v1.health import router as health_router
 app = FastAPI(
     title="StockGuard - Inventory Service",
     version="1.0.0",
-    description="Dedicated microservice managing Products, Stock Quantities, and Atomic Reservations"
+    description="Dedicated microservice managing Products, Stock Quantities, and Atomic Reservations",
 )
 
 app.add_middleware(

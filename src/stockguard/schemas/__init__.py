@@ -3,13 +3,13 @@ from stockguard.schemas.inventory import InventoryAdjustRequest, InventoryRespon
 from stockguard.schemas.reservation import (
     ReservationCreateRequest,
     ReservationReleaseRequest,
-    ReservationResponse
+    ReservationResponse,
 )
 from stockguard.schemas.order import (
     OrderItemCreate,
     OrderCreateRequest,
     OrderItemResponse,
-    OrderResponse
+    OrderResponse,
 )
 from stockguard.schemas.payment import PaymentProcessRequest, PaymentResponse
 from stockguard.schemas.fulfillment import FulfillmentProcessRequest, FulfillmentResponse

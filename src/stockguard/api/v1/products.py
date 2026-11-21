@@ -5,7 +5,7 @@ from stockguard.schemas.product import ProductCreate, ProductUpdate, ProductResp
 from stockguard.services.inventory_service import (
     InventoryService,
     ProductNotFoundException,
-    SkuAlreadyExistsException
+    SkuAlreadyExistsException,
 )
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -24,10 +24,7 @@ def create_product(req: ProductCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[ProductResponse])
 def list_products(
-    skip: int = 0,
-    limit: int = 500,
-    active_only: bool = True,
-    db: Session = Depends(get_db)
+    skip: int = 0, limit: int = 500, active_only: bool = True, db: Session = Depends(get_db)
 ):
     return InventoryService.list_products(db, skip=skip, limit=limit, active_only=active_only)
 

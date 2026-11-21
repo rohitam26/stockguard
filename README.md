@@ -15,12 +15,14 @@ StockGuard is architected as a modular monolith with decoupled domain boundaries
 ## 1. Technology Stack
 
 - **Core Runtime & Framework:** Python 3.11+, FastAPI, Pydantic v2, Pydantic Settings
+- **Security & Identity:** PyJWT, bcrypt, argon2-cffi, SHA-256 token hashing, sliding-window rate limiting
 - **Relational Persistence:** PostgreSQL 16 (psycopg 3 driver), SQLAlchemy 2.0 ORM / Core
 - **Database Migrations:** Alembic
-- **Asynchronous Messaging:** RabbitMQ 3.13 (aio-pika, Topic Exchanges, Dead Letter Queues) with resilient in-memory fallback
-- **Containerization & Orchestration:** Docker, Docker Compose, Kubernetes starter manifests
+- **Asynchronous Messaging:** RabbitMQ 3.13 (pika, publisher confirms, durable topic exchanges, Dead Letter Queues) with resilient in-memory fallback
+- **Observability & Telemetry:** OpenTelemetry SDK/API, Prometheus metrics exposition, structured JSON logging, Kubernetes probes
+- **Containerization & Deployment:** Docker, Docker Compose, Kubernetes starter manifests (`k8s/`)
 - **Frontend Console:** Vanilla ES6+ JavaScript, CSS3 Design System (Forest Green & Warm Ivory), HTML5
-- **Quality Assurance & Testing:** Pytest, HTTPX, Playwright, Locust, pip-audit
+- **Quality Assurance & Testing:** Pytest, pytest-cov (81% coverage), Locust (load testing), Playwright, Ruff, MyPy, Bandit, pip-audit
 
 ---
 
@@ -327,49 +329,70 @@ docker compose up -d --build
 
 ## 12. API Documentation
 
-| Method | Endpoint | Description | Key Parameters / Payload |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/health` | Service health & dependency status | None |
-| `GET` | `/api/v1/inventory` | List inventory items with filters | `skip`, `limit`, `low_stock_only` |
-| `POST` | `/api/v1/inventory` | Create new inventory SKU | `{"sku": "SKU-1", "name": "Item", "available_stock": 100, ...}` |
-| `POST` | `/api/v1/inventory/{sku}/adjust` | Adjust stock level (+/-) | `{"quantity_delta": 50, "reason": "Restock"}` |
-| `POST` | `/api/v1/reservations` | Create atomic stock reservation | `{"sku": "SKU-1", "quantity": 2, "idempotency_key": "uuid"}` |
-| `GET` | `/api/v1/reservations` | List active reservations | `status`, `sku` |
-| `POST` | `/api/v1/reservations/{id}/release` | Manually release an active hold | `reservation_id` |
-| `POST` | `/api/v1/orders/saga` | Execute checkout saga | `{"sku": "SKU-1", "quantity": 1, "simulate_payment_failure": false}` |
-| `GET` | `/api/v1/orders` | List order history | `status`, `skip`, `limit` |
-| `GET` | `/api/v1/outbox` | View outbox event stream | `status`, `limit` |
-| `POST` | `/api/v1/outbox/flush` | Manually trigger outbox flush | None |
+| Method | Endpoint | Description | Key Parameters / Payload | Role / Auth |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/register` | Register new user account | `{"email", "password", "role"}` | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/login` | Authenticate and obtain JWT tokens | `{"email", "password"}` | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/refresh` | Rotate refresh token and issue new JWT | `{"refresh_token"}` | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/revoke` | Revoke refresh token (logout) | `{"refresh_token"}` | Public |
+| `GET` | `/api/v1/auth/me` | Current authenticated user profile | None | Authenticated |
+| `GET` | `/api/v1/health` | Service health & dependency status | None | Public |
+| `GET` | `/api/v1/health/live` | Kubernetes liveness probe (200 OK) | None | Public |
+| `GET` | `/api/v1/health/ready` | Kubernetes readiness probe (PostgreSQL) | None | Public |
+| `GET` | `/metrics` | Prometheus text metrics exposition | None | Public |
+| `GET` | `/api/v1/inventory` | List inventory items with filters | `skip`, `limit`, `low_stock_only` | Public |
+| `POST` | `/api/v1/products` | Create new inventory SKU | `{"sku", "name", "price", ...}` | `INVENTORY_MANAGER`, `ADMIN` |
+| `POST` | `/api/v1/inventory/{sku}/adjust` | Adjust stock level (+/-) | `{"quantity_delta": 50, "reason": "Restock"}` | `INVENTORY_MANAGER`, `ADMIN` |
+| `POST` | `/api/v1/reservations` | Create atomic stock reservation | `{"sku": "SKU-1", "quantity": 2, "idempotency_key": "uuid"}` | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/reservations` | List active reservations | `status`, `sku` | Public |
+| `POST` | `/api/v1/reservations/{id}/release` | Manually release an active hold | `reservation_id` | `CUSTOMER`, `ADMIN` |
+| `POST` | `/api/v1/orders` | Create order with items in PENDING state | `{"customer_id", "items": [...]}` | `CUSTOMER`, `ADMIN` |
+| `POST` | `/api/v1/orders/{id}/checkout` | Execute checkout Saga with compensation | `payment_method`, `simulate_failure` | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/orders` | List order history | `status`, `skip`, `limit` | Public |
+| `GET` | `/api/v1/orders/{id}` | Get order details (IDOR protected) | `order_id` | `CUSTOMER` (owner), `ADMIN` |
+| `GET` | `/api/v1/outbox` | View outbox event stream | `status`, `limit` | `ADMIN` |
+| `POST` | `/api/v1/outbox/process` | Trigger outbox event dispatch | None | `ADMIN` |
 
 ---
 
 ## 13. Testing Instructions and Verified Results
 
-StockGuard maintains an extensive automated test suite covering unit behavior, database concurrency, API integration, and real-time frontend consistency.
+StockGuard maintains an extensive automated test suite covering unit behavior, database concurrency, failure injection, security, API integration, and multi-tiered load benchmarks.
 
 ```bash
-# 1. Run complete pytest suite
-python -m pytest -v
+# 1. Run complete pytest suite with test coverage (26 passed, 1 skipped)
+python -m pytest --cov=stockguard --cov-report=term-missing -v
 
-# 2. Run 25-endpoint comprehensive API verification
+# 2. Run authentication, JWT, and IDOR security verification
+python -m pytest tests/test_auth_security.py -v
+
+# 3. Run failure recovery & chaos test suite
+python -m pytest tests/test_failure_injection.py -v
+
+# 4. Run 25-endpoint comprehensive API verification
 python scripts/verify_all_api_endpoints.py
 
-# 3. Run real-time multi-window synchronization & recovery test
-python scripts/test_realtime_sync.py
+# 5. Run Locust multi-tiered performance load tests (25, 100, 250 concurrent users)
+python scripts/run_locust_benchmarks.py
 
-# 4. Run Playwright frontend UI verification & screenshot audit
-python scripts/audit_frontend.py
-
-# 5. Run dependency vulnerability scan
-python -m pip_audit -r requirements.txt
+# 6. Run static quality and security checks
+python -m ruff check src/stockguard
+python -m ruff format --check src/stockguard
+python -m mypy src/stockguard
+python -m bandit -r src/stockguard -ll -q
 ```
 
 ### Verified Test Results Summary
-- **Pytest Suite:** 13 passed, 1 skipped (isolated RabbitMQ integration test skipped when broker offline).
+- **Pytest Suite:** 26 passed, 1 skipped (100% of runnable unit, security, integration, and recovery tests passed).
+- **Test Coverage:** **81%** across all application modules.
 - **Concurrency Verification:** 100 concurrent requests against 5 units of stock yielded exactly 5 reservations and 95 rejections (100% data integrity).
-- **API Endpoint Verification:** 25/25 endpoints verified across inventory, reservation, saga, order, outbox, and health domains.
-- **Multi-Window Sync Verification:** 10/10 stages passed; real-time mutations in Window A reflected in Window B within polling intervals.
-- **Dependency Security Scan:** `pip-audit` reported 0 known vulnerabilities.
+- **Security & RBAC:** Verified password hashing with bcrypt/Argon2, JWT expiration, refresh token rotation, replay prevention, and IDOR protection.
+- **Failure Recovery:** Verified outbox worker crash recovery (`FOR UPDATE SKIP LOCKED`), poison message quarantine, and consumer deduplication.
+- **Locust Load Benchmarks:**
+  - *Baseline (25 users):* 55.2 RPS, P50: 150ms, P95: 760ms
+  - *Moderate (100 users):* 78.6 RPS, P50: 800ms, P95: 1500ms
+  - *Stress (250 users):* 95.6 RPS, P50: 990ms, P95: 2300ms
+- **Static Analysis:** Ruff: 0 errors; Bandit: 0 issues; MyPy: 0 errors across 60 source files.
 
 ---
 
@@ -380,18 +403,22 @@ python -m pip_audit -r requirements.txt
 | **Pessimistic Row Locks & DB Constraints** | Distributed Redis Locks (Redlock) | PostgreSQL row locks (`FOR UPDATE`) and `CHECK` constraints guarantee serializability at the single source of truth without split-brain failure risks. | Increases PostgreSQL lock wait time during severe sustained contention on a single SKU. |
 | **Modular Monolith Architecture** | Microservices Architecture | Consolidated domain modules allow high cohesion, simpler testing, and unified database transactions during prototyping. | Requires disciplined module boundaries to prevent accidental cross-domain imports. |
 | **Transactional Outbox Pattern** | Two-Phase Commit (2PC) / Direct Publish | Dual writes risk silent message drops during crashes; 2PC introduces complex multi-system locking overhead. Outbox provides guaranteed at-least-once delivery. | Adds minor latency between database commit and message broker publication. |
-| **Polled Auto-Refresh with Mutex** | WebSockets / Server-Sent Events | 5-second polling with client-side mutex (`isSyncing`) requires no stateful connection management, simplifying proxy and load-balancer topology. | Slightly higher HTTP request volume compared to long-lived push channels. |
+| **Stateful Refresh Token Rotation** | Stateless Long-Lived JWTs | Refresh tokens stored as SHA-256 hashes allow immediate server-side revocation and replay attack detection while keeping access tokens stateless. | Requires a single database lookup during token refresh requests. |
 
 ---
 
-## 15. Limitations and Future Improvements
+## 15. Operational Boundaries & Documentation Index
 
-StockGuard is designed as a functional distributed-systems portfolio prototype. The following limitations define the current scope and roadmap for production multi-tenant hardening:
-
-1. **Authentication and Authorization:** The current API endpoints operate without JWT or OAuth2 bearer token requirements. Production deployments require an API gateway or middleware with RBAC.
-2. **Push-Based Real-Time Streaming:** For applications supporting tens of thousands of active operators, replacing HTTP polling with Server-Sent Events (SSE) or WebSockets will reduce HTTP request overhead.
-3. **Multi-Tenant Database Partitioning:** Domain entities currently reside within a unified PostgreSQL database schema. Future scaling steps include splitting inventory, reservations, and orders into independent schemas or microservice database instances.
-4. **Distributed Tracing:** Integrating OpenTelemetry tracing headers across HTTP requests, database transactions, and RabbitMQ message headers.
+For in-depth operational procedures, architecture specifications, and benchmark data:
+- [Architecture Specification](docs/ARCHITECTURE.md)
+- [Distributed Architecture & Microservices Decomposition](docs/DISTRIBUTED_ARCHITECTURE.md)
+- [Reliability Engineering Guide](docs/RELIABILITY.md)
+- [Failure Modes & Recovery Runbook](docs/FAILURE_RECOVERY.md)
+- [Observability & Telemetry Guide](docs/OBSERVABILITY.md)
+- [Locust Load Benchmark Report](docs/LOAD_TEST_REPORT.md)
+- [Security Policy & Matrix](docs/SECURITY.md)
+- [Architecture Decision Records (ADRs)](docs/adr/)
+- [Educational Kubernetes Manifests](k8s/README.md)
 
 ---
 

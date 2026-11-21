@@ -86,3 +86,49 @@ To eliminate dual-write discrepancies between the PostgreSQL database and the Ra
 - A decoupled `OutboxWorker` reads pending messages, publishes them with `delivery_mode=2` (Persistent) to `stockguard.topic`, and marks the outbox status as `PUBLISHED`.
 - If the broker is momentarily unavailable, messages remain safely staged in `outbox_messages` with retry counters and dead-letter queue routing.
 - Consumers utilize the `processed_events` table for message deduplication.
+
+## 5. Security & Identity Architecture
+
+StockGuard implements defense-in-depth API security:
+1. **JWT Authentication & Token Lifecycle:**
+   - Stateless JWT access tokens signed with HMAC-SHA256 (30-minute expiration).
+   - Stateful refresh tokens stored as SHA-256 hashes in `refresh_tokens`. Every refresh triggers **token rotation** and revocation of prior tokens, preventing replay attacks.
+2. **Password Hashing:**
+   - Handled via `bcrypt` (12 rounds) with Argon2 verification compatibility.
+   - Plaintext passwords and tokens are never persisted or exposed in application logs.
+3. **Role-Based Access Control (RBAC):**
+   - Fine-grained role hierarchy (`ADMIN`, `INVENTORY_MANAGER`, `CUSTOMER`, `SERVICE`).
+   - Least-privilege validation enforced at the API boundary via FastAPI dependencies (`require_role`).
+4. **IDOR Prevention:**
+   - Resource ownership checks (`check_resource_ownership`) verify customer ownership of orders and reservations.
+5. **Sliding-Window Rate Limiting:**
+   - `InMemoryRateLimiter` enforces rate boundaries on `/auth/*` and sensitive endpoints, responding with HTTP 429 and `Retry-After` headers.
+
+## 6. Outbox Concurrency & Crash Recovery
+
+1. **`FOR UPDATE SKIP LOCKED`:**
+   - Multiple background outbox workers safely poll pending messages concurrently without double-publishing.
+2. **Stuck Event Recovery:**
+   - Messages left in `PROCESSING` status for over 60 seconds (due to unexpected process termination or network drops) are automatically recovered by `recover_stuck_messages()` and restored to `PENDING`.
+3. **Poison Message Quarantine:**
+   - Messages with corrupt or unparseable payloads are immediately isolated to `FAILED` status, logging the root cause without crashing workers or blocking healthy messages.
+
+## 7. Observability & Telemetry
+
+1. **Correlation IDs & Request Tracing:**
+   - `ObservabilityMiddleware` assigns or propagates `X-Correlation-ID` across inbound requests and downstream logs.
+   - Optional distributed tracing via OpenTelemetry (`opentelemetry-instrumentation-fastapi`).
+2. **Prometheus Metrics Exposition:**
+   - Metrics available at `/metrics` and `/api/v1/health/metrics` covering request throughput, P50/P95 latencies, reservation outcomes, and outbox backlog gauges.
+3. **Kubernetes Health Probes:**
+   - `/api/v1/health/live` (process liveness).
+   - `/api/v1/health/ready` (PostgreSQL connectivity check).
+
+## 8. Architecture Decision Records (ADRs)
+
+Key architectural trade-offs are documented in [`docs/adr/`](adr/):
+- **[ADR 001: Modular Monolith with Decoupled Entrypoints](adr/001-modular-monolith-vs-microservices.md)**
+- **[ADR 002: Transactional Outbox Pattern vs Dual Writes](adr/002-transactional-outbox-vs-dual-writes.md)**
+- **[ADR 003: Pessimistic Row Locking vs Distributed Locks](adr/003-pessimistic-locking-vs-optimistic-concurrency.md)**
+- **[ADR 004: Orchestrator-Driven Saga vs Event Choreography](adr/004-saga-orchestration-vs-choreography.md)**
+- **[ADR 005: JWT Authentication, RBAC & Refresh Token Rotation](adr/005-jwt-rbac-refresh-token-rotation.md)**

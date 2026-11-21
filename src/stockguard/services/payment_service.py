@@ -23,7 +23,11 @@ class PaymentService:
             select(Payment).where(Payment.order_id == req.order_id)
         ).scalar_one_or_none()
         if existing_payment:
-            logger.info("Payment already exists for order %s (status: %s)", req.order_id, existing_payment.status)
+            logger.info(
+                "Payment already exists for order %s (status: %s)",
+                req.order_id,
+                existing_payment.status,
+            )
             return existing_payment
 
         # Simulation logic:
@@ -31,7 +35,11 @@ class PaymentService:
 
         status = PaymentStatus.FAILED if is_failure else PaymentStatus.SUCCESS
         txn_id = f"TXN-{uuid.uuid4().hex[:12].upper()}" if not is_failure else None
-        failure_msg = req.failure_reason or "Simulated payment decline / insufficient funds" if is_failure else None
+        failure_msg = (
+            req.failure_reason or "Simulated payment decline / insufficient funds"
+            if is_failure
+            else None
+        )
 
         payment = Payment(
             order_id=order.id,
@@ -40,7 +48,7 @@ class PaymentService:
             status=status,
             transaction_id=txn_id,
             payment_method=req.payment_method,
-            failure_reason=failure_msg
+            failure_reason=failure_msg,
         )
         db.add(payment)
         db.flush()  # Crucial: populate payment.id before outbox record!
@@ -57,13 +65,15 @@ class PaymentService:
                 "currency": payment.currency,
                 "status": payment.status.value,
                 "transaction_id": payment.transaction_id,
-                "failure_reason": payment.failure_reason
-            }
+                "failure_reason": payment.failure_reason,
+            },
         )
 
         db.commit()
         db.refresh(payment)
-        logger.info("Payment %s processed for order %s with status %s", payment.id, order.id, payment.status)
+        logger.info(
+            "Payment %s processed for order %s with status %s", payment.id, order.id, payment.status
+        )
         return payment
 
     @staticmethod

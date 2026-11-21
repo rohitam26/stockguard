@@ -12,7 +12,7 @@ class OutboxService:
         aggregate_type: str,
         aggregate_id: str,
         payload: dict[str, Any],
-        headers: dict[str, Any] | None = None
+        headers: dict[str, Any] | None = None,
     ) -> OutboxMessage:
         """
         Creates an OutboxMessage within the caller's active database transaction.
@@ -24,7 +24,7 @@ class OutboxService:
             aggregate_id=aggregate_id,
             payload=json.dumps(payload, default=str),
             headers=json.dumps(headers or {}, default=str),
-            status=OutboxStatus.PENDING
+            status=OutboxStatus.PENDING,
         )
         db.add(message)
         return message
