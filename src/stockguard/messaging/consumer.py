@@ -44,10 +44,12 @@ class RabbitMQConsumerWorker:
         try:
             params = pika.URLParameters(settings.RABBITMQ_URL)
             params.socket_timeout = 2
-            self._connection = pika.BlockingConnection(params)
-            self._channel = self._connection.channel()
+            connection = pika.BlockingConnection(params)
+            channel = connection.channel()
             # Set prefetch count for fair dispatch
-            self._channel.basic_qos(prefetch_count=10)
+            channel.basic_qos(prefetch_count=10)
+            self._connection = connection
+            self._channel = channel
             logger.info("RabbitMQConsumerWorker connected to %s", self.queue_name)
             return True
         except Exception as e:
@@ -71,10 +73,24 @@ class RabbitMQConsumerWorker:
         method: pika.spec.Basic.Deliver,
         properties: pika.spec.BasicProperties,
         body: bytes,
-    ):
-        message_id = properties.message_id or (properties.headers or {}).get("message_id")
+    ) -> None:
+        delivery_tag: int | None = getattr(method, "delivery_tag", None)
+        routing_key: str = str(getattr(method, "routing_key", "") or "")
+
+        # Safely extract headers and message ID from optional RabbitMQ properties
+        raw_headers = getattr(properties, "headers", None)
+        headers: dict[str, Any] = raw_headers if isinstance(raw_headers, dict) else {}
+
+        raw_message_id = getattr(properties, "message_id", None)
+        message_id: str | None = str(raw_message_id) if raw_message_id else None
+        if not message_id and headers:
+            header_msg_id = headers.get("message_id")
+            if header_msg_id:
+                message_id = str(header_msg_id)
+
         if not message_id:
-            message_id = f"anon-{method.delivery_tag}"
+            tag_str = str(delivery_tag) if delivery_tag is not None else "0"
+            message_id = f"anon-{tag_str}"
 
         event_key = f"{message_id}:{self.consumer_name}"
         SessionFactory = get_session_factory()
@@ -88,7 +104,8 @@ class RabbitMQConsumerWorker:
                     self.consumer_name,
                     event_key,
                 )
-                ch.basic_ack(delivery_tag=method.delivery_tag)
+                if delivery_tag is not None:
+                    ch.basic_ack(delivery_tag=delivery_tag)
                 return
 
         # 2. Decode payload
@@ -98,25 +115,26 @@ class RabbitMQConsumerWorker:
             logger.error(
                 "[%s] Malformed JSON payload (%s). Rejecting to DLQ.", self.consumer_name, e
             )
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            if delivery_tag is not None:
+                ch.basic_nack(delivery_tag=delivery_tag, requeue=False)
             return
 
         # 3. Execute Handler
-        headers = properties.headers or {}
         try:
-            success = self.handler(method.routing_key, payload, headers)
+            success = self.handler(routing_key, payload, headers)
             if success:
                 # 4. Record Idempotency Tracking & Ack
                 with SessionFactory() as db:
                     processed_record = ProcessedEvent(
                         id=event_key,
                         consumer_name=self.consumer_name,
-                        event_type=method.routing_key,
+                        event_type=routing_key,
                     )
                     db.add(processed_record)
                     db.commit()
 
-                ch.basic_ack(delivery_tag=method.delivery_tag)
+                if delivery_tag is not None:
+                    ch.basic_ack(delivery_tag=delivery_tag)
                 logger.debug(
                     "[%s] Successfully processed & acknowledged event %s",
                     self.consumer_name,
@@ -132,20 +150,25 @@ class RabbitMQConsumerWorker:
                 e,
             )
             # Requeue=False routes to x-dead-letter-exchange (stockguard.dlq)
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            if delivery_tag is not None:
+                ch.basic_nack(delivery_tag=delivery_tag, requeue=False)
 
-    def start_consuming(self):
+    def start_consuming(self) -> None:
         if not self._channel or self._channel.is_closed:
             if not self.connect():
                 raise ConnectionError("Unable to connect to RabbitMQ broker")
 
+        channel = self._channel
+        if not channel or channel.is_closed:
+            raise ConnectionError("RabbitMQ channel is not available")
+
         self._is_running = True
-        self._channel.basic_consume(
+        channel.basic_consume(
             queue=self.queue_name, on_message_callback=self.process_delivery, auto_ack=False
         )
         logger.info("[%s] Started consuming from %s...", self.consumer_name, self.queue_name)
         try:
-            self._channel.start_consuming()
+            channel.start_consuming()
         except Exception as e:
             logger.info("[%s] Consumer loop stopped (%s)", self.consumer_name, e)
         finally:
@@ -158,17 +181,19 @@ class RabbitMQConsumerWorker:
         self._thread.start()
         return self._thread
 
-    def stop(self):
+    def stop(self) -> None:
         self._is_running = False
-        if self._channel and self._channel.is_open:
+        channel = self._channel
+        if channel and channel.is_open:
             try:
-                self._channel.stop_consuming()
-                self._channel.close()
+                channel.stop_consuming()
+                channel.close()
             except Exception:
                 pass
-        if self._connection and self._connection.is_open:
+        connection = self._connection
+        if connection and connection.is_open:
             try:
-                self._connection.close()
+                connection.close()
             except Exception:
                 pass
         logger.info("[%s] Consumer stopped.", self.consumer_name)
