@@ -63,37 +63,66 @@ StockGuard addresses these challenges by consolidating reliable distributed syst
 ## 5. Architecture Diagram
 
 ```
-                       +----------------------------+
-                       |      FastAPI Gateway       |
-                       |    (REST API & Web UI)     |
-                       +--------------+-------------+
-                                      |
-             +------------------------+------------------------+
-             |                        |                        |
-    +--------v-------+       +--------v-------+       +--------v-------+
-    |   Inventory    |       |  Reservation   |       |     Order      |
-    |    Service     |       |     Engine     |       |    Service     |
-    +--------+-------+       +--------+-------+       +--------+-------+
-             |                        |                        |
-             +------------------------+------------------------+
-                                      |
-                           +----------v----------+
-                           |  Saga Orchestrator  |
-                           +----+-----------+----+
-                                |           |
-                       +--------v----+ +----v--------+
-                       |   Payment   | | Fulfillment |
-                       |  Simulator  | |   Service   |
-                       +-------------+ +-------------+
-                                |           |
-        +-----------------------+-----------+-----------------------+
-        |                                                           |
-+-------v---------+                                         +-------v---------+
-| PostgreSQL 16   |                                         | RabbitMQ Broker |
-| - Row Locks     |                                         | - Topic Exch    |
-| - CHECK Constr  |                                         | - DLQ Routing   |
-| - Outbox Table  | === Polled by Outbox Worker ===========>| - At-Least-Once |
-+-----------------+                                         +-----------------+
+                           +-------------------------------------------------+
+                           |                 Client Layer                    |
+                           |       (Browser Console / Web UI / REST Client)  |
+                           +------------------------+------------------------+
+                                                    | HTTP + JWT Bearer
+                                                    v
+                           +-------------------------------------------------+
+                           |           FastAPI Application Gateway           |
+                           | - ObservabilityMiddleware (X-Correlation-ID)    |
+                           | - Sliding-Window Rate Limiter (429 Retry-After) |
+                           | - Prometheus Metrics (/metrics)                 |
+                           +------------------------+------------------------+
+                                                    |
+         +--------------------+---------------------+--------------------+--------------------+
+         |                    |                     |                    |                    |
++--------v-------+   +--------v-------+    +--------v-------+   +--------v-------+   +--------v-------+
+|  Auth Service  |   |   Inventory    |    |  Reservation   |   |     Order      |   |  Outbox Admin  |
+| - JWT Hashing  |   |    Service     |    |     Engine     |   |    Service     |   |    Service     |
+| - Token Rotate |   | - Catalog SKU  |    | - Atomic Holds |   | - Order States |   | - Message Log  |
+| - User RBAC    |   | - Restock Log  |    | - TTL Sweeper  |   | - IDOR Guard   |   | - Manual Flush |
++--------+-------+   +--------+-------+    +--------+-------+   +--------+-------+   +--------+-------+
+         |                    |                     |                    |                    |
+         |                    +---------------------+--------------------+                    |
+         |                                          |                                         |
+         |                                 +--------v-------+                                 |
+         |                                 |      Saga      |                                 |
+         |                                 |  Orchestrator  |                                 |
+         |                                 +----+-------+---+                                 |
+         |                                      |       |                                     |
+         |                             +--------v---+ +-v----------+                          |
+         |                             |  Payment   | |Fulfillment |                          |
+         |                             | Simulator  | |  Service   |                          |
+         |                             +--------+---+ +-+----------+                          |
+         |                                      |       |                                     |
+         +--------------------------------------+-------+-------------------------------------+
+                                                |
+                                                v (SQLAlchemy 2.0 / Psycopg 3 Pool)
+         +------------------------------------------------------------------------------------+
+         |                                 PostgreSQL 16 Engine                               |
+         | - Strict CHECK Constraints (available_stock >= 0, reserved_stock >= 0)             |
+         | - Pessimistic Row Locking (SELECT ... FOR UPDATE)                                  |
+         | - Atomic Outbox Table (outbox_messages) & Deduplication Table (processed_events)   |
+         +--------------------------------------+---------------------------------------------+
+                                                |
+                                                v (FOR UPDATE SKIP LOCKED Poll)
+                                     +----------------------+
+                                     |    Outbox Worker     |
+                                     | - 60s Stuck Recovery |
+                                     | - Poison Quarantine  |
+                                     +----------+-----------+
+                                                |
+                        +-----------------------+-----------------------+
+                        | (Primary)                                     | (Resilient Fallback)
+                        v                                               v
+       +---------------------------------+             +---------------------------------+
+       |     RabbitMQ Message Broker     |             |    In-Memory Event Bus Fallback |
+       | - Topic Exchange: stockguard.top|             | - Synchronous Thread-Safe Bus   |
+       | - Publisher Confirms            |             | - Zero-Dependency Local Dev     |
+       | - Dead-Letter Exchange: .dlq    |             +---------------------------------+
+       +---------------------------------+
 ```
 
 ---
@@ -180,7 +209,7 @@ To eliminate dual-write vulnerabilities between PostgreSQL and RabbitMQ, StockGu
      |
      +--- 1. Poll for PENDING outbox messages (SELECT ... FOR UPDATE SKIP LOCKED)
      +--- 2. Publish payload to RabbitMQ Topic Exchange
-     +--- 3. Mark message PROCESSED (or increment retry_count on failure)
+     +--- 3. Mark message PUBLISHED (or increment retry_count on failure)
      +--- 4. Route to stockguard.dlq if retry limit exceeded
 ```
 
@@ -195,7 +224,7 @@ To eliminate dual-write vulnerabilities between PostgreSQL and RabbitMQ, StockGu
 StockGuard implements an orchestrator-based Saga to coordinate checkout flows spanning inventory, payments, and fulfillment:
 
 ```
-[ Client: POST /api/v1/orders/saga ]
+[ Client: POST /api/v1/orders/{order_id}/checkout ]
                |
                v
      +-------------------+
@@ -207,7 +236,7 @@ StockGuard implements an orchestrator-based Saga to coordinate checkout flows sp
                |
                |--- Step 2: Process Payment
                |    +---> [Approved] ---> Step 3: Dispatch Fulfillment
-               |    |                     +---> [Success] ---> Order Completed (201)
+               |    |                     +---> [Success] ---> Order Completed (200 OK)
                |    |
                |    +---> [Declined] ---> INITIATE BACKWARD COMPENSATION
                |                               |
@@ -216,7 +245,7 @@ StockGuard implements an orchestrator-based Saga to coordinate checkout flows sp
                |--- Compensation Step 1: Release Inventory Hold
                |    (reserved_stock -> available_stock)
                |
-               |--- Compensation Step 2: Mark Order FAILED (402 Payment Required)
+               |--- Compensation Step 2: Mark Order CANCELLED / FAILED
                |
                v
      [ Client receives structured failure details; stock remains fully balanced ]
@@ -335,26 +364,37 @@ docker compose up -d --build
 | Method | Endpoint | Description | Key Parameters / Payload | Role / Auth |
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/auth/register` | Register new user account | `{"email", "password", "role"}` | Public (Rate Limited) |
-| `POST` | `/api/v1/auth/login` | Authenticate and obtain JWT tokens | `{"email", "password"}` | Public (Rate Limited) |
-| `POST` | `/api/v1/auth/refresh` | Rotate refresh token and issue new JWT | `{"refresh_token"}` | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/login` | Authenticate and obtain JWT access (30m) + refresh token (7d) | `{"email", "password"}` | Public (Rate Limited) |
+| `POST` | `/api/v1/auth/refresh` | Rotate refresh token and issue new JWT (30m) | `{"refresh_token"}` | Public (Rate Limited) |
 | `POST` | `/api/v1/auth/revoke` | Revoke refresh token (logout) | `{"refresh_token"}` | Public |
 | `GET` | `/api/v1/auth/me` | Current authenticated user profile | None | Authenticated |
+| `GET` | `/api/v1/products` | List catalog products | `skip`, `limit` | Public |
+| `POST` | `/api/v1/products` | Create new catalog SKU | `{"sku", "name", "price", ...}` | `INVENTORY_MANAGER`, `ADMIN` |
+| `GET` | `/api/v1/products/{product_id}` | Get product details by ID | `product_id` | Public |
+| `PUT` | `/api/v1/products/{product_id}` | Update product information | `{"name", "price", ...}` | `INVENTORY_MANAGER`, `ADMIN` |
+| `GET` | `/api/v1/inventory` | List stock levels & low stock indicators | `skip`, `limit` | Public |
+| `GET` | `/api/v1/inventory/{sku}` | Get inventory level for SKU | `sku` | Public |
+| `POST` | `/api/v1/inventory/adjust` | Atomic stock level adjustment (+/-) | `{"sku", "quantity_delta", "reason"}` | `INVENTORY_MANAGER`, `ADMIN` |
+| `POST` | `/api/v1/reservations` | Create atomic stock reservation | `{"sku", "quantity", "idempotency_key"}` | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/reservations` | List active reservations | `skip`, `limit` | Public |
+| `GET` | `/api/v1/reservations/{reservation_id}` | Get reservation details | `reservation_id` | Public |
+| `POST` | `/api/v1/reservations/{reservation_id}/release` | Manually release an active hold | `reservation_id`, `{"reason"}` | `CUSTOMER`, `ADMIN` |
+| `POST` | `/api/v1/reservations/expire-stale` | Trigger background sweep of expired holds | None | `ADMIN` |
+| `POST` | `/api/v1/orders` | Create order with items in PENDING state | `{"customer_id", "items": [...]}` | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/orders` | List order history | `skip`, `limit` | Public |
+| `GET` | `/api/v1/orders/{order_id}` | Get order details (IDOR protected) | `order_id` | `CUSTOMER` (owner), `ADMIN` |
+| `POST` | `/api/v1/orders/{order_id}/checkout` | Execute checkout Saga with compensation | `payment_method`, `simulate_failure` | `CUSTOMER`, `ADMIN` |
+| `POST` | `/api/v1/payments/process` | Process or simulate order payment | `{"order_id", "payment_method", ...}` | `CUSTOMER`, `ADMIN` |
+| `GET` | `/api/v1/payments/order/{order_id}` | Get payment transaction for order | `order_id` | Authenticated |
+| `POST` | `/api/v1/fulfillment/order/{order_id}` | Initiate packing & fulfillment dispatch | `order_id`, `{"carrier", "notes"}` | `INVENTORY_MANAGER`, `ADMIN` |
+| `GET` | `/api/v1/fulfillment/order/{order_id}` | Get fulfillment & tracking status for order | `order_id` | Authenticated |
+| `GET` | `/api/v1/outbox` | View outbox event stream | `skip`, `limit` | `ADMIN` |
+| `POST` | `/api/v1/outbox/process` | Trigger outbox event dispatch batch | `batch_size` | `ADMIN` |
 | `GET` | `/api/v1/health` | Service health & dependency status | None | Public |
 | `GET` | `/api/v1/health/live` | Kubernetes liveness probe (200 OK) | None | Public |
 | `GET` | `/api/v1/health/ready` | Kubernetes readiness probe (PostgreSQL) | None | Public |
-| `GET` | `/metrics` | Prometheus text metrics exposition | None | Public |
-| `GET` | `/api/v1/inventory` | List inventory items with filters | `skip`, `limit`, `low_stock_only` | Public |
-| `POST` | `/api/v1/products` | Create new inventory SKU | `{"sku", "name", "price", ...}` | `INVENTORY_MANAGER`, `ADMIN` |
-| `POST` | `/api/v1/inventory/{sku}/adjust` | Adjust stock level (+/-) | `{"quantity_delta": 50, "reason": "Restock"}` | `INVENTORY_MANAGER`, `ADMIN` |
-| `POST` | `/api/v1/reservations` | Create atomic stock reservation | `{"sku": "SKU-1", "quantity": 2, "idempotency_key": "uuid"}` | `CUSTOMER`, `ADMIN` |
-| `GET` | `/api/v1/reservations` | List active reservations | `status`, `sku` | Public |
-| `POST` | `/api/v1/reservations/{id}/release` | Manually release an active hold | `reservation_id` | `CUSTOMER`, `ADMIN` |
-| `POST` | `/api/v1/orders` | Create order with items in PENDING state | `{"customer_id", "items": [...]}` | `CUSTOMER`, `ADMIN` |
-| `POST` | `/api/v1/orders/{id}/checkout` | Execute checkout Saga with compensation | `payment_method`, `simulate_failure` | `CUSTOMER`, `ADMIN` |
-| `GET` | `/api/v1/orders` | List order history | `status`, `skip`, `limit` | Public |
-| `GET` | `/api/v1/orders/{id}` | Get order details (IDOR protected) | `order_id` | `CUSTOMER` (owner), `ADMIN` |
-| `GET` | `/api/v1/outbox` | View outbox event stream | `status`, `limit` | `ADMIN` |
-| `POST` | `/api/v1/outbox/process` | Trigger outbox event dispatch | None | `ADMIN` |
+| `GET` | `/api/v1/health/metrics` | In-app Prometheus metrics exposition | None | Public |
+| `GET` | `/metrics` | Top-level Prometheus text exposition | None | Public |
 
 ---
 

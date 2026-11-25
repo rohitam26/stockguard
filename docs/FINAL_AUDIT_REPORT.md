@@ -172,7 +172,7 @@ Independent microservice entrypoints have been created in `src/stockguard/micros
 - `payment_service_app.py` (Port 8003)
 - `fulfillment_service_app.py` (Port 8004)
 
-Full analysis and contract schemas are documented in [docs/DISTRIBUTED_ARCHITECTURE.md](file:///e:/develop/stockguard/docs/DISTRIBUTED_ARCHITECTURE.md).
+Full analysis and contract schemas are documented in [docs/DISTRIBUTED_ARCHITECTURE.md](DISTRIBUTED_ARCHITECTURE.md).
 
 ---
 

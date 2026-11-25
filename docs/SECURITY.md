@@ -5,7 +5,7 @@
 StockGuard enforces defense-in-depth across the API, application, database, and messaging layers:
 
 - **Authentication & JWT Security:** Signed JWT access tokens (HMAC-SHA256) with 30-minute expiration.
-- **Refresh Token Rotation:** Refresh tokens are stored strictly as SHA-256 hashes; each rotation invalidates the prior token, preventing replay attacks.
+- **Refresh Token Rotation:** Refresh tokens (7-day expiration) are stored strictly as SHA-256 hashes; each rotation invalidates the prior token, preventing replay attacks.
 - **Password Hashing:** Passwords hashed with `bcrypt` (work factor 12) or Argon2. Plaintext passwords are never persisted.
 - **Role-Based Access Control (RBAC):** Fine-grained permission enforcement (`ADMIN`, `INVENTORY_MANAGER`, `CUSTOMER`, `SERVICE`).
 - **IDOR Protection:** Resource-level ownership validation prevents unauthorized cross-user order and data inspection.
