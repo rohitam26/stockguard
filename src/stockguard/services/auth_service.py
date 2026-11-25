@@ -107,7 +107,12 @@ class AuthService:
             raise InvalidTokenException("Invalid or revoked refresh token")
 
         now = datetime.now(timezone.utc)
-        if token_record.expires_at < now:
+        expires_at = token_record.expires_at
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if expires_at < now:
             logger.warning("Refresh token expired for user %s", token_record.user_id)
             raise InvalidTokenException("Refresh token has expired")
 
