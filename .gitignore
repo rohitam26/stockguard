@@ -28,16 +28,33 @@ venv/
 env/
 ENV/
 
-# Testing
+# Testing & Quality Caches
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # Database & Logs
 *.db
 *.sqlite3
 *.log
 pgsql_data/
+*.tmp
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDE & Editor Configurations
+.vscode/
+.idea/
+.cursor/
+.claude/
+*.sublime-project
+*.sublime-workspace
 
 # Environment Variables & Secrets
 .env

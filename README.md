@@ -303,6 +303,9 @@ Adaptive mobile navigation and responsive card layout verified across mobile bro
    RABBITMQ_URL=amqp://<rabbitmq_user>:<rabbitmq_password>@localhost:5672/
    RABBITMQ_ENABLED=true
    ENVIRONMENT=development
+   # Generate a secure key using: openssl rand -hex 32
+   # WARNING: The generated key must never be committed or reused publicly.
+   JWT_SECRET_KEY=replace_with_a_random_secret
    ```
 
 5. **Run Database Migrations:**

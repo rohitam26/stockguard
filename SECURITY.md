@@ -4,7 +4,11 @@
 
 The StockGuard team takes security vulnerabilities seriously. If you discover a security issue or vulnerability, please do NOT create a public GitHub issue.
 
-Instead, please report it via private vulnerability reporting or email the maintainers directly at `security@stockguard.internal`.
+Instead, please report vulnerabilities using **GitHub Private Vulnerability Reporting**:
+1. Navigate to the repository's [Security Advisories tab](https://github.com/rohitam26/stockguard/security/advisories/new).
+2. Click **Report a vulnerability** to submit advisory details privately to the maintainers.
+
+If private vulnerability reporting is not yet enabled or accessible, contact the repository maintainer directly through a private GitHub channel or configure a designated security contact email (`[SECURITY_CONTACT_EMAIL_NEEDS_CONFIGURATION]`).
 
 Please include:
 1. Description of the vulnerability.
